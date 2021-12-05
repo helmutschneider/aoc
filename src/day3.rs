@@ -45,7 +45,7 @@ fn part1(input: &str) {
         epsilon = epsilon | (epsilon_bit << shift_to);
     }
 
-    println!("Gamma: {:?}, Epsilon: {:?}", gamma, epsilon);
+    println!("Day 3A: Gamma = {:?}, Epsilon = {:?}", gamma, epsilon);
 }
 
 #[derive(Debug, PartialEq)]
@@ -67,10 +67,10 @@ fn find_line_of_kind(input: &str, kind: Kind) -> &str {
 
             let mut did_remove_line = false;
 
-            // if we are looking for oxygen we want to remove and
-            // there are an equal amount of 0/1's we want to keep
-            // the 1s. since we are looking for the most common
-            // characters this results in a default of "1".
+            // if we are looking for oxygen and there are an equal
+            // amount of 0/1's we want to keep the 1s. since we are
+            // looking for the most common characters this results
+            // in a default of "1".
             //
             // when looking for CO2 the result is surprisingly the
             // same. because we are looking for uncommon characters
@@ -106,7 +106,7 @@ fn part2(input: &str) {
     let co2 = find_line_of_kind(input, Kind::CO2);
 
     println!(
-        "Oxygen: {:?}, CO2: {:?}",
+        "Day 3B: Oxygen = {:?}, CO2 = {:?}",
         i64::from_str_radix(oxy, 2).unwrap(),
         i64::from_str_radix(co2, 2).unwrap()
     );

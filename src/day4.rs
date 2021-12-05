@@ -123,7 +123,7 @@ fn part1(input: &str) {
             board.maybe_mark_number(num);
 
             if board.is_winner() {
-                println!("Mega score: {:?}", get_board_score(board, num));
+                println!("Day 4A: {:?}", get_board_score(board, num));
 
                 return;
             }
@@ -152,5 +152,5 @@ fn part2(input: &str) {
 
     let (board, drawn) = last_winner.unwrap();
 
-    println!("Last score: {:?}", get_board_score(&board, drawn));
+    println!("Day 4B: {:?}", get_board_score(&board, drawn));
 }

@@ -14,7 +14,7 @@ fn part1(input: &str) {
         incr_count += usize::from(parsed > prev);
         prev = parsed;
     }
-    println!("{:?}", incr_count);
+    println!("Day 1A: {:?}", incr_count);
 }
 
 fn part2(input: &str) {
@@ -28,7 +28,7 @@ fn part2(input: &str) {
         incr_count += usize::from(window > prev);
         prev = window;
     }
-    println!("{:?}", incr_count);
+    println!("Day 1B: {:?}", incr_count);
 }
 
 fn parse_i64(line: &str) -> i64 {

@@ -72,12 +72,12 @@ pub fn run() {
 
 fn part1(input: &str) {
     let pos = do_the_parsing(&input, Part::One);
-    println!("{:?}", pos);
+    println!("Day 2A: {:?}", pos);
 }
 
 fn part2(input: &str) {
     let pos = do_the_parsing(&input, Part::Two);
-    println!("{:?}", pos);
+    println!("Day 2B: {:?}", pos);
 }
 
 fn do_the_parsing(input: &str, part: Part) -> Position {
