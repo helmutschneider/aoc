@@ -8,4 +8,4 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v2
       - name: "Run"
-        run: cargo run
+        run: cargo run --release
