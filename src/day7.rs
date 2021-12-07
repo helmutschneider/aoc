@@ -42,19 +42,17 @@ fn part2(input: &[i64]) {
     let max = input[input.len() - 1];
     let mut min_fuel = i64::MAX;
 
-    for x in min..=max {
+    for maybe_target_x in min..=max {
         let mut fuel = 0;
         for num in input {
-            fuel += determine_fuel_cost((x - num).abs());
+            fuel += determine_fuel_cost((maybe_target_x - num).abs());
 
             // HIGH PERFORMANCE TWEAK!!!
             if fuel > min_fuel {
                 break;
             }
         }
-        if fuel < min_fuel {
-            min_fuel = fuel;
-        }
+        min_fuel = std::cmp::min(min_fuel, fuel);
     }
 
     println!("Day 7B: {:?}", min_fuel);
