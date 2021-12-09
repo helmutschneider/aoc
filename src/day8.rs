@@ -200,5 +200,5 @@ fn part2(lines: &[&str]) {
         sum += digit_str.parse::<u64>().unwrap();
     }
 
-    println!("{:?}", sum);
+    println!("Day 8B: {:?}", sum);
 }
