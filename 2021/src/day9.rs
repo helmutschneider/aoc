@@ -51,20 +51,18 @@ fn find_low_points(grid: &Grid) -> Vec<Point> {
     for x in 0i64..(SIZE_X as i64) {
         for y in 0i64..(SIZE_Y as i64) {
             let pt = maybe_get_point(grid, x, y).unwrap();
-            let left = maybe_get_point(grid, x - 1, y)
-                .map(|pt| pt.value)
-                .unwrap_or(u64::MAX);
-            let right = maybe_get_point(grid, x + 1, y)
-                .map(|pt| pt.value)
-                .unwrap_or(u64::MAX);
-            let top = maybe_get_point(grid, x, y - 1)
-                .map(|pt| pt.value)
-                .unwrap_or(u64::MAX);
-            let bottom = maybe_get_point(grid, x, y + 1)
-                .map(|pt| pt.value)
-                .unwrap_or(u64::MAX);
+            let surrounding_pts = [
+                maybe_get_point(grid, x - 1, y),
+                maybe_get_point(grid, x + 1, y),
+                maybe_get_point(grid, x, y - 1),
+                maybe_get_point(grid, x, y + 1),
+            ];
 
-            if pt.value < left && pt.value < right && pt.value < top && pt.value < bottom {
+            let is_low_point = surrounding_pts.iter().all(|other| {
+                return pt.value < other.map(|o| o.value).unwrap_or(u64::MAX);
+            });
+
+            if is_low_point {
                 out.push(pt);
             }
         }
@@ -85,18 +83,18 @@ fn get_basin(grid: &Grid, pt: Point, out: &mut HashSet<Point>) {
         out.insert(pt);
     }
 
-    let left = maybe_get_point(grid, pt.x - 1, pt.y);
-    let right = maybe_get_point(grid, pt.x + 1, pt.y);
-    let top = maybe_get_point(grid, pt.x, pt.y - 1);
-    let bottom = maybe_get_point(grid, pt.x, pt.y + 1);
-
-    let maybe_basin_pts: Vec<Point> = [left, right, top, bottom]
-        .iter()
-        .filter(|pt| pt.is_some())
-        .map(|pt| pt.unwrap())
-        .collect();
+    let maybe_basin_pts = [
+        maybe_get_point(grid, pt.x - 1, pt.y),
+        maybe_get_point(grid, pt.x + 1, pt.y),
+        maybe_get_point(grid, pt.x, pt.y - 1),
+        maybe_get_point(grid, pt.x, pt.y + 1),
+    ];
 
     for maybe_basin_pt in maybe_basin_pts {
+        if maybe_basin_pt.is_none() {
+            continue;
+        }
+        let maybe_basin_pt = maybe_basin_pt.unwrap();
         // the puzzle description makes it seem as if the
         // next basin point must increase by exactly 1 in
         // value, which is apparently not the case.
