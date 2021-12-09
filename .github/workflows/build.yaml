@@ -7,5 +7,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
-      - name: "Run"
+      - name: "2021"
         run: cargo run --release
+        working-directory: "2021/"

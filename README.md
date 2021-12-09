@@ -1,3 +1,3 @@
-![Build status](https://github.com/helmutschneider/aoc2021/workflows/build/badge.svg)
+![Build status](https://github.com/helmutschneider/aoc/workflows/build/badge.svg)
 
 aoc bruh
