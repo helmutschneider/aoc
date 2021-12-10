@@ -65,7 +65,7 @@ impl Position {
 }
 
 pub fn run() {
-    let input = fs::read_to_string("./src/day2_input.txt").unwrap();
+    let input = fs::read_to_string("./src/day02_input.txt").unwrap();
     part1(&input);
     part2(&input);
 }

@@ -6,7 +6,7 @@ const SIZE_Y: usize = 100;
 type Grid = [[u8; SIZE_X]; SIZE_Y];
 
 pub fn run() {
-    let input = fs::read_to_string("./src/day9_input.txt").unwrap();
+    let input = fs::read_to_string("./src/day09_input.txt").unwrap();
     let mut data: Grid = [[0; 100]; 100];
     let mut i = 0;
 

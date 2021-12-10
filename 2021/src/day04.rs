@@ -68,7 +68,7 @@ impl Board {
 }
 
 pub fn run() {
-    let input = fs::read_to_string("./src/day4_input.txt").unwrap();
+    let input = fs::read_to_string("./src/day04_input.txt").unwrap();
 
     part1(&input);
     part2(&input);

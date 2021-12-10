@@ -1,7 +1,7 @@
 use std::fs;
 
 pub fn run() {
-    let input = fs::read_to_string("./src/day7_input.txt").unwrap();
+    let input = fs::read_to_string("./src/day07_input.txt").unwrap();
     let mut numbers: Vec<i64> = input
         .trim()
         .split(',')
@@ -26,7 +26,7 @@ fn part1(input: &[i64]) {
         fuel += (x - num).abs();
     }
 
-    println!("Part 7A: {:?}", fuel);
+    println!("Day 7A: {:?}", fuel);
 }
 
 fn determine_fuel_cost(num: i64) -> i64 {

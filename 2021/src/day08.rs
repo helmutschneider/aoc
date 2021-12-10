@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use std::fs;
 
 pub fn run() {
-    let input = fs::read_to_string("./src/day8_input.txt").unwrap();
+    let input = fs::read_to_string("./src/day08_input.txt").unwrap();
     let lines: Vec<&str> = input.lines().collect();
     part1(&lines);
     part2(&lines);
