@@ -97,7 +97,7 @@ fn parse_commands(lines: &[&str]) -> Vec<Command> {
     return out;
 }
 
-fn resolve_wire(commands: &[Command], wire: &str, cache: &mut HashMap<String, u16>) -> u16 {
+fn resolve_wire(commands: &[Command], wire: &str, cache: &mut WireCache) -> u16 {
     let maybe_cached = cache.get(wire);
 
     if let Some(v) = maybe_cached {
@@ -113,14 +113,14 @@ fn resolve_wire(commands: &[Command], wire: &str, cache: &mut HashMap<String, u1
 }
 
 fn part1(commands: &[Command]) {
-    let mut cache: HashMap<String, u16> = HashMap::new();
+    let mut cache = WireCache::new();
     let value = resolve_wire(commands, "a", &mut cache);
 
     println!("Day 7A: {:?}", value);
 }
 
 fn part2(commands: &[Command]) {
-    let mut cache: HashMap<String, u16> = HashMap::new();
+    let mut cache = WireCache::new();
     cache.insert("b".to_string(), 16076);
 
     let value = resolve_wire(commands, "a", &mut cache);
