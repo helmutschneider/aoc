@@ -9,11 +9,16 @@ struct Distance<'a> {
 }
 
 type DistanceMap<'a> = HashMap<&'a str, Vec<Distance<'a>>>;
-type RoutesWithDistance<'a> = Vec<(Vec<&'a str>, i64)>;
+type RoutesWithDistance<'a> = Vec<Distance<'a>>;
+
+const CITY_COUNT: usize = 8;
 
 pub fn run() {
     let input = std::fs::read_to_string("src/day09_input.txt").unwrap();
     let dists = parse_distances(&input);
+
+    assert_eq!(CITY_COUNT, dists.len());
+
     let routes = get_routes_and_distances(&dists);
 
     part1(&routes);
@@ -45,9 +50,13 @@ fn parse_distances(input: &str) -> DistanceMap {
     return out;
 }
 
-fn make_routes<'a>(stack: &[&'a str], dists: &DistanceMap<'a>, out: &mut Vec<Vec<&'a str>>) {
+fn make_routes<'a>(
+    stack: &[&'a str],
+    dists: &DistanceMap<'a>,
+    out: &mut Vec<[&'a str; CITY_COUNT]>,
+) {
     if stack.len() == dists.len() {
-        out.push(stack.to_vec());
+        out.push(stack.try_into().unwrap());
         return;
     }
 
@@ -77,7 +86,7 @@ fn get_routes_and_distances<'a>(dists: &DistanceMap<'a>) -> RoutesWithDistance<'
     let mut out = Vec::new();
     make_routes(&[], dists, &mut out);
 
-    let mut distances: Vec<(Vec<&str>, i64)> = out
+    let mut distances: Vec<Distance> = out
         .iter()
         .map(|route| {
             let mut dist = 0;
@@ -89,11 +98,15 @@ fn get_routes_and_distances<'a>(dists: &DistanceMap<'a>) -> RoutesWithDistance<'
                 dist += found.unwrap().value;
             }
 
-            return (route.clone(), dist);
+            return Distance {
+                from: route[0],
+                to: route.last().unwrap(),
+                value: dist,
+            };
         })
         .collect();
 
-    distances.sort_by(|a, b| a.1.cmp(&b.1));
+    distances.sort_by(|a, b| a.value.cmp(&b.value));
 
     return distances;
 }
