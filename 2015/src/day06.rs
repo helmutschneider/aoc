@@ -1,5 +1,5 @@
 pub fn run() {
-    let input = std::fs::read_to_string("src/day6_input.txt").unwrap();
+    let input = std::fs::read_to_string("src/day06_input.txt").unwrap();
     let lines: Vec<&str> = input.lines().collect();
     let commands = parse_commands(&lines);
     part1(&commands);

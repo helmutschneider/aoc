@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 pub fn run() {
-    let input = std::fs::read_to_string("src/day7_input.txt").unwrap();
+    let input = std::fs::read_to_string("src/day07_input.txt").unwrap();
     let lines: Vec<&str> = input.trim().lines().collect();
     let commands = parse_commands(&lines);
     part1(&commands);
