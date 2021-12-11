@@ -152,9 +152,10 @@ fn part1(grid: Grid) {
 fn part2(grid: Grid) {
     let mut g = grid;
     let mut i = 1;
+    let expected_flashes = (SIZE_X as i64) * (SIZE_Y as i64);
     loop {
         let flashes = tick(&mut g);
-        if flashes as usize == SIZE_X * SIZE_Y {
+        if flashes == expected_flashes {
             println!("Day 11B: {}", i);
             return;
         }
