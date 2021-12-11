@@ -1,21 +1,23 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
 
-#[derive(Debug, Clone)]
-struct Distance {
-    from: String,
-    to: String,
+#[derive(Debug, Clone, Copy)]
+struct Distance<'a> {
+    from: &'a str,
+    to: &'a str,
     value: i64,
 }
 
-type DistanceMap = HashMap<String, Vec<Distance>>;
+type DistanceMap<'a> = HashMap<&'a str, Vec<Distance<'a>>>;
+type RoutesWithDistance<'a> = Vec<(Vec<&'a str>, i64)>;
 
 pub fn run() {
     let input = std::fs::read_to_string("src/day09_input.txt").unwrap();
     let dists = parse_distances(&input);
+    let routes = get_routes_and_distances(&dists);
 
-    part1(&dists);
-    part2(&dists);
+    part1(&routes);
+    part2(&routes);
 }
 
 fn parse_distances(input: &str) -> DistanceMap {
@@ -26,24 +28,24 @@ fn parse_distances(input: &str) -> DistanceMap {
         let to = chunks[2];
         let value: i64 = chunks[4].parse().unwrap();
 
-        let a = out.entry(from.to_string()).or_insert(Vec::new());
+        let a = out.entry(from).or_insert(Vec::new());
         a.push(Distance {
-            from: from.to_string(),
-            to: to.to_string(),
+            from: from,
+            to: to,
             value,
         });
 
-        let b = out.entry(to.to_string()).or_insert(Vec::new());
+        let b = out.entry(to).or_insert(Vec::new());
         b.push(Distance {
-            from: to.to_string(),
-            to: from.to_string(),
+            from: to,
+            to: from,
             value,
         });
     }
     return out;
 }
 
-fn make_routes(stack: &[String], dists: &DistanceMap, out: &mut Vec<Vec<String>>) {
+fn make_routes<'a>(stack: &[&'a str], dists: &DistanceMap<'a>, out: &mut Vec<Vec<&'a str>>) {
     if stack.len() == dists.len() {
         out.push(stack.to_vec());
         return;
@@ -51,7 +53,7 @@ fn make_routes(stack: &[String], dists: &DistanceMap, out: &mut Vec<Vec<String>>
 
     if stack.is_empty() {
         for (k, _) in dists {
-            let s = &[k.clone()][..];
+            let s = &[*k][..];
             make_routes(s, dists, out)
         }
         return;
@@ -71,11 +73,11 @@ fn make_routes(stack: &[String], dists: &DistanceMap, out: &mut Vec<Vec<String>>
     }
 }
 
-fn get_routes_and_distances(dists: &DistanceMap) -> Vec<(Vec<String>, i64)> {
+fn get_routes_and_distances<'a>(dists: &DistanceMap<'a>) -> RoutesWithDistance<'a> {
     let mut out = Vec::new();
     make_routes(&[], dists, &mut out);
 
-    let mut distances: Vec<(Vec<String>, i64)> = out
+    let mut distances: Vec<(Vec<&str>, i64)> = out
         .iter()
         .map(|route| {
             let mut dist = 0;
@@ -96,11 +98,9 @@ fn get_routes_and_distances(dists: &DistanceMap) -> Vec<(Vec<String>, i64)> {
     return distances;
 }
 
-fn part1(dists: &DistanceMap) {
-    let distances = get_routes_and_distances(dists);
-    println!("Day 9A: {:?}", distances[0]);
+fn part1(dists: &RoutesWithDistance) {
+    println!("Day 9A: {:?}", dists[0]);
 }
-fn part2(dists: &DistanceMap) {
-    let distances = get_routes_and_distances(dists);
-    println!("Day 9B: {:?}", distances.last().unwrap());
+fn part2(dists: &RoutesWithDistance) {
+    println!("Day 9B: {:?}", dists.last().unwrap());
 }
