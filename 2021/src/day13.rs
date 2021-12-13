@@ -4,38 +4,13 @@ use std::hash::Hash;
 
 pub fn run() {
     let input = std::fs::read_to_string("src/day13_input.txt").unwrap();
-    /*
-        let input = r#"
-    6,10
-    0,14
-    9,10
-    0,3
-    10,4
-    4,11
-    6,0
-    6,12
-    4,1
-    0,13
-    10,12
-    3,4
-    3,0
-    8,4
-    1,10
-    2,14
-    8,10
-    9,0
-
-    fold along y=7
-    fold along x=5
-    "#;
-    */
     part1(&input);
     part2(&input);
 }
 
 #[derive(Debug)]
 struct Paper {
-    points: HashMap<Point, bool>,
+    points: HashSet<Point>,
     height: i64,
     width: i64,
 }
@@ -52,7 +27,7 @@ enum Fold {
     Left { x: i64 },
 }
 
-enum ParseState {
+enum ParserState {
     Point,
     Fold,
 }
@@ -60,23 +35,23 @@ enum ParseState {
 fn parse(input: &str) -> (Paper, Vec<Fold>) {
     let mut parsed_pts: HashSet<Point> = HashSet::new();
     let mut folds: Vec<Fold> = Vec::new();
-    let mut parse_state = ParseState::Point;
+    let mut parse_state = ParserState::Point;
 
     for line in input.trim().lines() {
         if line.is_empty() {
-            parse_state = ParseState::Fold;
+            parse_state = ParserState::Fold;
             continue;
         }
 
         match parse_state {
-            ParseState::Point => {
+            ParserState::Point => {
                 let (x_str, y_str) = line.split_once(',').unwrap();
                 parsed_pts.insert(Point {
                     x: x_str.parse().unwrap(),
                     y: y_str.parse().unwrap(),
                 });
             }
-            ParseState::Fold => {
+            ParserState::Fold => {
                 let parts: Vec<&str> = line.split(&[' ', '='][..]).collect();
 
                 match parts[2] {
@@ -98,17 +73,9 @@ fn parse(input: &str) -> (Paper, Vec<Fold>) {
             y: std::cmp::max(carry.y, pt.y + 1),
         };
     });
-    let mut pts: HashMap<Point, bool> = HashMap::new();
-
-    for y in 0..size.y {
-        for x in 0..size.x {
-            let pt = Point { x, y };
-            pts.insert(pt, parsed_pts.contains(&pt));
-        }
-    }
 
     let paper = Paper {
-        points: pts,
+        points: parsed_pts,
         height: size.y,
         width: size.x,
     };
@@ -116,14 +83,28 @@ fn parse(input: &str) -> (Paper, Vec<Fold>) {
     return (paper, folds);
 }
 
-fn get_folded_pt(pt: Point, fold: Fold) -> Option<Point> {
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum MaybeFoldedPoint {
+    Unchanged,
+    Folded(Point),
+    Disappears,
+}
+
+fn get_folded_pt(pt: Point, fold: Fold) -> MaybeFoldedPoint {
+    if matches!(fold, Fold::Left { x } if x == pt.x) {
+        return MaybeFoldedPoint::Disappears;
+    }
+    if matches!(fold, Fold::Up { y } if y == pt.y) {
+        return MaybeFoldedPoint::Disappears;
+    }
+
     let is_folded = match fold {
         Fold::Left { x } => pt.x > x,
         Fold::Up { y } => pt.y > y,
     };
 
     if !is_folded {
-        return None;
+        return MaybeFoldedPoint::Unchanged;
     }
 
     let next_pt = match fold {
@@ -137,7 +118,7 @@ fn get_folded_pt(pt: Point, fold: Fold) -> Option<Point> {
         },
     };
 
-    return Some(next_pt);
+    return MaybeFoldedPoint::Folded(next_pt);
 }
 
 fn do_fold(paper: &Paper, fold: Fold) -> Paper {
@@ -147,31 +128,23 @@ fn do_fold(paper: &Paper, fold: Fold) -> Paper {
     };
 
     let mut next = Paper {
-        points: HashMap::new(),
+        points: HashSet::new(),
         height: next_height,
         width: next_width,
     };
 
-    for y in 0..paper.height {
-        for x in 0..paper.width {
-            let pt = Point { x, y };
+    for pt in &paper.points {
+        let next_pt = get_folded_pt(*pt, fold);
 
-            // point disappears when folding.
-            if pt.x == next_width || pt.y == next_height {
-                continue;
+        match next_pt {
+            MaybeFoldedPoint::Unchanged => {
+                next.points.insert(*pt);
             }
-
-            let is_folded = pt.x > next_width || pt.y > next_height;
-            let is_currently_set = paper.points[&pt];
-            if is_folded {
-                let next_pt = get_folded_pt(pt, fold).unwrap();
-                let is_folded_set = *paper.points.get(&next_pt).unwrap_or(&false);
-                next.points
-                    .insert(next_pt, is_currently_set || is_folded_set);
-            } else {
-                next.points.insert(pt, is_currently_set);
-            };
-        }
+            MaybeFoldedPoint::Folded(p) => {
+                next.points.insert(p);
+            }
+            MaybeFoldedPoint::Disappears => {}
+        };
     }
 
     return next;
@@ -181,7 +154,7 @@ fn print_paper(paper: &Paper) {
     for y in 0..paper.height {
         for x in 0..paper.width {
             let pt = Point { x, y };
-            let is_set = paper.points[&pt];
+            let is_set = paper.points.contains(&pt);
             print!("{}", if is_set { '#' } else { '.' });
         }
         println!()
@@ -193,11 +166,7 @@ fn part1(input: &str) {
     let (mut paper, folds) = parse(input);
 
     paper = do_fold(&paper, folds[0]);
-
-    let visible_dots = paper
-        .points
-        .iter()
-        .fold(0, |carry, pt| carry + i64::from(*pt.1));
+    let visible_dots = paper.points.len();
 
     println!("Day 13A: {:?}", visible_dots);
 }
@@ -220,38 +189,34 @@ mod tests {
     fn get_folded_pt_with_non_folded_pt() {
         let pt = get_folded_pt(Point { x: 5, y: 7 }, Fold::Up { y: 8 });
 
-        assert_eq!(None, pt);
+        assert_eq!(MaybeFoldedPoint::Unchanged, pt);
     }
 
     #[test]
     fn get_folded_pt_with_y_fold() {
-        let pt = get_folded_pt(Point { x: 5, y: 14 }, Fold::Up { y: 7 }).unwrap();
+        let pt = get_folded_pt(Point { x: 5, y: 14 }, Fold::Up { y: 7 });
 
-        assert_eq!(5, pt.x);
-        assert_eq!(0, pt.y);
+        assert_eq!(MaybeFoldedPoint::Folded(Point { x: 5, y: 0 }), pt);
     }
 
     #[test]
     fn get_folded_pt_with_point_close_to_fold() {
-        let pt = get_folded_pt(Point { x: 5, y: 8 }, Fold::Up { y: 7 }).unwrap();
+        let pt = get_folded_pt(Point { x: 5, y: 8 }, Fold::Up { y: 7 });
 
-        assert_eq!(5, pt.x);
-        assert_eq!(6, pt.y);
+        assert_eq!(MaybeFoldedPoint::Folded(Point { x: 5, y: 6 }), pt);
     }
 
     #[test]
     fn get_folded_pt_with_point_close_to_fold_x() {
-        let pt = get_folded_pt(Point { x: 5, y: 8 }, Fold::Left { x: 4 }).unwrap();
+        let pt = get_folded_pt(Point { x: 5, y: 8 }, Fold::Left { x: 4 });
 
-        assert_eq!(3, pt.x);
-        assert_eq!(8, pt.y);
+        assert_eq!(MaybeFoldedPoint::Folded(Point { x: 3, y: 8 }), pt);
     }
 
     #[test]
     fn get_folded_pt_with_non_symmetric_fold() {
-        let pt = get_folded_pt(Point { x: 5, y: 14 }, Fold::Up { y: 12 }).unwrap();
+        let pt = get_folded_pt(Point { x: 5, y: 14 }, Fold::Up { y: 12 });
 
-        assert_eq!(5, pt.x);
-        assert_eq!(10, pt.y);
+        assert_eq!(MaybeFoldedPoint::Folded(Point { x: 5, y: 10 }), pt);
     }
 }
