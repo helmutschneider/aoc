@@ -18,7 +18,7 @@ fn get_closing_char(chr: char) -> char {
     };
 }
 
-fn get_corrup_score(chr: char) -> i64 {
+fn get_corrupt_score(chr: char) -> i64 {
     return match chr {
         ')' => 3,
         ']' => 57,
@@ -81,7 +81,7 @@ fn part1(lines: &[&str]) {
     for line in lines {
         let parsed = parse(line);
         score += match parsed {
-            ParseResult::Corrupt { found, expected: _ } => get_corrup_score(found),
+            ParseResult::Corrupt { found, expected: _ } => get_corrupt_score(found),
             _ => 0,
         };
     }
