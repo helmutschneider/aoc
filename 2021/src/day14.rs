@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap};
 
 pub fn run() {
     let input = std::fs::read_to_string("src/day14_input.txt").unwrap();
@@ -21,46 +21,66 @@ fn parse(input: &str) -> (&str, Rules) {
     return (template, rules);
 }
 
-fn polymerize(template: &str, rules: &Rules, iterations: i64) -> String {
-    let mut result: Vec<char> = template.chars().collect();
+type KnownExpansion = HashMap<char, i64>;
 
-    for n in 0..iterations {
-        let mut parts = Vec::<char>::new();
+fn polymerize_and_count_chars(input: &str, rules: &Rules, iters: i64) -> HashMap<char, i64> {
+    fn rec(pair: &str, rules: &Rules, expand_to_depth: i64, cache: &mut HashMap<(String, i64), KnownExpansion>, out: &mut HashMap<char, i64>) {
+        assert_eq!(2, pair.len());
 
-        for i in 0..(result.len() - 1) {
-            let pair = format!("{}{}", result[i], result[i + 1]);
-    
-            if let Some(to_insert) = rules.get(pair.as_str()) {
-                if i == 0 {
-                    parts.push(result[i]);
-                }
-                
-                parts.push(*to_insert);
-                parts.push(result[i + 1]);
-            } else {
-                parts.push(result[i]);
-                parts.push(result[i + 1]);
+        let cache_key = (pair.to_string(), expand_to_depth);
+
+        if let Some(known) = cache.get(&cache_key) {
+            for (ch, count) in known {
+                let e = out.entry(*ch).or_insert(0);
+                *e += count;
             }
+            return;
+        }
+        
+        // cache the entire subtree.
+        let mut inner_out = HashMap::new();
+        let ch = rules[pair];
+        inner_out.insert(ch, 1);
+
+        if expand_to_depth > 1 {
+            let next_expand_to = expand_to_depth - 1;
+            let left = format!("{}{}", &pair[0..1], ch);
+            let right = format!("{}{}", ch, &pair[1..2]);
+
+            rec(&left, rules, next_expand_to, cache, &mut inner_out);
+            rec(&right, rules, next_expand_to, cache, &mut inner_out);
         }
 
-        result = parts;
+        for (ch, count) in &inner_out {
+            let e = out.entry(*ch).or_insert(0);
+            *e += count;
+        }
+
+        cache.insert(cache_key, inner_out);
     }
 
-    return String::from_iter(result);
-}
+    let mut out = HashMap::new();
+    let mut cache = HashMap::new();
 
-fn polymerize_and_get_the_diff(input: &str, iterations: i64) -> i64 {
-    let (template, rules) = parse(&input);
-    let result = polymerize(template, &rules, iterations);
-    let mut map = HashMap::<char, i64>::new();
-
-    for ch in result.chars() {
-        let e = map.entry(ch).or_insert(0);
+    for ch in input.chars() {
+        let e = out.entry(ch).or_insert(0);
         *e += 1;
     }
 
-    let min = map.values().min().unwrap();
-    let max = map.values().max().unwrap();
+    for i in 0..(input.len() - 1) {
+        let pair = &input[i..(i + 2)];
+        rec(pair, rules, iters, &mut cache, &mut out);
+    }
+    
+    return out;
+}
+
+fn polymerize_and_get_the_diff(input: &str, iterations: i64) -> i64 {
+    let (template, rules) = parse(input);
+    let chars = polymerize_and_count_chars(template, &rules, iterations);
+
+    let max = chars.values().max().unwrap();
+    let min = chars.values().min().unwrap();
 
     return max - min;
 }
@@ -70,8 +90,7 @@ fn part1(input: &str) {
 }
 
 fn part2(input: &str) {
-    // ⚠️ YOU'RE TOO SLOW ⚠️
-    // println!("Day 14B: {}", polymerize_and_get_the_diff(input, 40));
+    println!("Day 14B: {}", polymerize_and_get_the_diff(input, 40));
 }
 
 mod tests {
@@ -98,6 +117,15 @@ CC -> N
 CN -> C
     "#;
 
+    fn count_chars(value: &str) -> HashMap<char, i64> {
+        let mut out = HashMap::new();
+        for ch in value.chars() {
+            let e = out.entry(ch).or_insert(0);
+            *e += 1;
+        }
+        return out;
+    }
+
     #[test]
     fn parse_the_example() {        
         let (template, rules) = parse(EXAMPLE_INPUT);
@@ -109,19 +137,10 @@ CN -> C
     #[test]
     fn polymerize_the_example() {
         let (template, rules) = parse(EXAMPLE_INPUT);
-        let mut result = template.to_string();
-
-        result = polymerize(&result, &rules, 1);
-        assert_eq!("NCNBCHB", result);
-
-        result = polymerize(&result, &rules, 1);
-        assert_eq!("NBCCNBBBCBHCB", result);
-
-        result = polymerize(&result, &rules, 1);
-        assert_eq!("NBBBCNCCNBBNBNBBCHBHHBCHB", result);
-
-        result = polymerize(&result, &rules, 1);
-        assert_eq!("NBBNBNBBCCNBCNCCNBBNBBNBBBNBBNBBCBHCBHHNHCBBCBHCB", result);
+        assert_eq!(count_chars("NCNBCHB"), polymerize_and_count_chars(template, &rules, 1));
+        assert_eq!(count_chars("NBCCNBBBCBHCB"), polymerize_and_count_chars(template, &rules, 2));
+        assert_eq!(count_chars("NBBBCNCCNBBNBNBBCHBHHBCHB"), polymerize_and_count_chars(template, &rules, 3));
+        assert_eq!(count_chars("NBBNBNBBCCNBCNCCNBBNBBNBBBNBBNBBCBHCBHHNHCBBCBHCB"), polymerize_and_count_chars(template, &rules, 4));
     }
 
     #[test]
