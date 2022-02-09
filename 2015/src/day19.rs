@@ -101,18 +101,18 @@ fn find_fewest_reductions_possible(
         let (item, count) = stack.pop().unwrap();
 
         for &(from, to) in replacements {
-            if !item.contains(to) {
-                continue;
+            let expanded = expand_once(&item, &[(to, from)]);
+
+            for res in expanded {
+                if seen.contains(&res) {
+                    continue;
+                }
+                if res == target {
+                    return count + 1;
+                }
+                seen.insert(res.clone());
+                stack.push((res.clone(), count + 1));
             }
-            let res = item.replacen(to, from, 1);
-            if seen.contains(&res) {
-                continue;
-            }
-            if res == target {
-                return count + 1;
-            }
-            seen.insert(res.clone());
-            stack.push((res.clone(), count + 1));
         }
     }
 
@@ -122,4 +122,14 @@ fn find_fewest_reductions_possible(
 fn part2() {
     let res = find_fewest_reductions_possible(MOLECULE, "e", &REPLACEMENTS);
     println!("Day 19B: {}", res);
+}
+
+mod tests {
+    use crate::day19::*;
+
+    #[test]
+    fn should_work_on_non_coincidental_stuff() {
+        let res = find_fewest_reductions_possible("ABCA", "E", &[("D", "A"), ("E", "ABCD")]);
+        assert_eq!(2, res);
+    }
 }
