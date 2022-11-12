@@ -1,6 +1,12 @@
-use crate::util;
+use crate::util::*;
 
 type Vec<T> = heapless::Vec<T, 128>;
+
+pub const DAY_01: Day<i32> = Day {
+    day: 1,
+    parts: &[part1, part2],
+    tests: &[test1, test2],
+};
 
 fn parse_input() -> Vec<i32> {
     return INPUT
@@ -14,7 +20,7 @@ fn parse_input() -> Vec<i32> {
 
 fn get_fuel_for_mass(mass: i32) -> i32 {
     let fuel = (mass / 3) - 2;
-    return util::max(0, fuel);
+    return max(0, fuel);
 }
 
 fn get_fuel_for_mass_rec(mass: i32) -> i32 {
@@ -32,7 +38,7 @@ fn get_fuel_for_mass_rec(mass: i32) -> i32 {
     return total_fuel;
 }
 
-pub fn part1() -> i32 {
+fn part1() -> i32 {
     let values = parse_input();
     let sum = values
         .iter()
@@ -41,13 +47,23 @@ pub fn part1() -> i32 {
     return sum;
 }
 
-pub fn part2() -> i32 {
+fn part2() -> i32 {
     let values = parse_input();
     let sum = values
         .iter()
         .fold(0, |carry, x| carry + get_fuel_for_mass_rec(*x));
 
     return sum;
+}
+
+fn test1() {
+    assert_eq!(654, get_fuel_for_mass(1969));
+    assert_eq!(33583, get_fuel_for_mass(100756));
+}
+
+fn test2() {
+    assert_eq!(966, get_fuel_for_mass_rec(1969));
+    assert_eq!(50346, get_fuel_for_mass_rec(100756));
 }
 
 const INPUT: &'static str = r#"

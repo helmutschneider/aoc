@@ -26,7 +26,7 @@ static mut USB_SERIAL: Option<SerialPort<hal::usb::UsbBus>> = None;
 type String = heapless::String<1024>;
 type Vec<T, const N: usize> = heapless::Vec<T, N>;
 
-fn _println_serial(value: &str) {
+fn _write_usb_serial(value: &str, with_newline: bool) -> Option<()> {
     let mut formatted = String::new();
 
     // the serial terminal apparently wants '\r\n' as the line break.
@@ -40,9 +40,11 @@ fn _println_serial(value: &str) {
         prev = ch;
     }
 
-    formatted.push_str("\r\n");
+    if with_newline {
+        formatted.push_str("\r\n");
+    }
 
-    let serial = unsafe { USB_SERIAL.as_mut().unwrap() };
+    let serial = unsafe { USB_SERIAL.as_mut() }?;
     let bytes = formatted.as_bytes();
     let mut total_bytes_written = 0;
 
@@ -51,29 +53,57 @@ fn _println_serial(value: &str) {
         let chunk = &bytes[total_bytes_written..];
         if let Ok(res) = serial.write(chunk) {
             total_bytes_written += res;
+        } else {
+            // the USB buffer is full, or something.
+            break;
         }
     }
 
     serial.flush();
+
+    return Some(());
+}
+
+macro_rules! print {
+    ($($x:tt)*) => {{
+        let mut s = String::new();
+        let _ = write!(&mut s, $($x)*);
+        _write_usb_serial(&s, false);
+    }};
 }
 
 macro_rules! println {
     ($($x:tt)*) => {{
         let mut s = String::new();
         let _ = write!(&mut s, $($x)*);
-        _println_serial(&s);
+        _write_usb_serial(&s, true);
     }};
 }
 
 #[inline(never)]
 #[panic_handler]
-fn panic(info: &PanicInfo) -> ! {
+fn _panic_handler(info: &PanicInfo) -> ! {
     let delay = unsafe { DELAY.as_mut().unwrap() };
 
     loop {
         println!("{}", info);
         delay.delay_ms(1000);
         atomic::compiler_fence(Ordering::SeqCst);
+    }
+}
+
+fn run_day<T: core::fmt::Display>(day: util::Day<T>) {
+    println!("########## AOC day {} ##########", day.day);
+
+    for (i, test) in day.tests.iter().enumerate() {
+        print!("Running test {}... ", i + 1);
+        test();
+        println!("OK");
+    }
+
+    for (i, part) in day.parts.iter().enumerate() {
+        let result = part();
+        println!("Part {}: {}", i + 1, result);
     }
 }
 
@@ -93,6 +123,14 @@ fn main() -> ! {
     )
     .ok()
     .unwrap();
+
+    let sio = hal::Sio::new(pac.SIO);
+    let pins = rp_pico::Pins::new(
+        pac.IO_BANK0,
+        pac.PADS_BANK0,
+        sio.gpio_bank0,
+        &mut pac.RESETS,
+    );
 
     let usb_bus = UsbBusAllocator::new(hal::usb::UsbBus::new(
         pac.USBCTRL_REGS,
@@ -116,20 +154,13 @@ fn main() -> ! {
         .product("Serial port")
         .serial_number("PICO")
         .device_class(2) // from: https://www.usb.org/defined-class-codes
+        .max_packet_size_0(64)
         .build();
     unsafe {
         USB_DEVICE = Some(usb_dev);
     }
 
     let usb_dev_ref = unsafe { USB_DEVICE.as_mut().unwrap() };
-    let sio = hal::Sio::new(pac.SIO);
-    let pins = rp_pico::Pins::new(
-        pac.IO_BANK0,
-        pac.PADS_BANK0,
-        sio.gpio_bank0,
-        &mut pac.RESETS,
-    );
-
     let delay = cortex_m::delay::Delay::new(core.SYST, clocks.system_clock.freq().to_Hz());
 
     unsafe {
@@ -156,14 +187,14 @@ fn main() -> ! {
         }
 
         if let Ok(_) = ping_counter.wait() {
-            println!("Day 01 P1: {}", day01::part1());
-            println!("Day 01 P2: {}", day01::part2());
-            // println!("Ping yee! {}", timer.get_counter());
-
-            // bruh.
-            // assert_eq!(1, 2);
+            run_day(day01::DAY_01);
         }
 
-        usb_dev_ref.poll(&mut [serial_ref]);
+        if usb_dev_ref.poll(&mut [serial_ref]) {
+            let mut buffer = [0u8; 64];
+
+            // read from the serial port and discard the data.
+            serial_ref.read(&mut buffer);
+        }
     }
 }
