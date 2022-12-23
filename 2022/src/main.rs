@@ -6,6 +6,7 @@ mod day02;
 mod day03;
 mod day04;
 mod day05;
+mod day06;
 
 mod util;
 
@@ -27,8 +28,9 @@ static mut DELAY: Option<cortex_m::delay::Delay> = None;
 static mut USB_DEVICE: Option<UsbDevice<hal::usb::UsbBus>> = None;
 static mut USB_BUS: Option<UsbBusAllocator<hal::usb::UsbBus>> = None;
 static mut USB_SERIAL: Option<SerialPort<hal::usb::UsbBus>> = None;
+static mut TIMER: Option<hal::Timer> = None;
 
-type String = heapless::String<1024>;
+type String = heapless::String<8192>;
 type Vec<T, const N: usize> = heapless::Vec<T, N>;
 
 fn _write_usb_serial(value: &str, with_newline: bool) -> Option<()> {
@@ -75,7 +77,7 @@ macro_rules! print {
         use core::fmt::Write;
         use crate::_write_usb_serial;
 
-        let mut s = heapless::String::<1024>::new();
+        let mut s = String::new();
         let _ = write!(&mut s, $($x)*);
         _write_usb_serial(&s, false);
     }};
@@ -87,7 +89,7 @@ macro_rules! println {
         use core::fmt::Write;
         use crate::_write_usb_serial;
 
-        let mut s = heapless::String::<1024>::new();
+        let mut s = String::new();
         let _ = write!(&mut s, $($x)*);
         _write_usb_serial(&s, true);
     }};
@@ -96,11 +98,21 @@ macro_rules! println {
 #[inline(never)]
 #[panic_handler]
 fn _panic_handler(info: &PanicInfo) -> ! {
-    let delay = unsafe { DELAY.as_mut().unwrap() };
+    let timer = unsafe { TIMER.as_ref().unwrap() };
+    let mut print_counter = timer.count_down();
+    print_counter.start(5_000.millis());
+
+    let mut k: u64 = 0;
 
     loop {
-        println!("{}", info);
-        delay.delay_ms(1000);
+        poll_usb_serial();
+
+        if let Ok(_) = print_counter.wait() {
+            println!("########## PANIC {} ##########", k);
+            println!("{}", info);
+            k += 1;
+        }
+
         atomic::compiler_fence(Ordering::SeqCst);
     }
 }
@@ -118,6 +130,18 @@ fn run_day<T: core::fmt::Display>(day: util::Day<T>) {
         let result = part();
         println!("Part {}: {}", i + 1, result);
     }
+}
+
+fn poll_usb_serial() -> () {
+    let usb_dev_ref = unsafe { USB_DEVICE.as_mut().unwrap() };
+    let serial_ref = unsafe { USB_SERIAL.as_mut().unwrap() };
+
+    if !usb_dev_ref.poll(&mut [serial_ref]) {
+        return;
+    }
+
+    let mut buffer = [0u8; 256];
+    serial_ref.read(&mut buffer);
 }
 
 #[entry]
@@ -173,22 +197,31 @@ fn main() -> ! {
         USB_DEVICE = Some(usb_dev);
     }
 
-    let usb_dev_ref = unsafe { USB_DEVICE.as_mut().unwrap() };
     let delay = cortex_m::delay::Delay::new(core.SYST, clocks.system_clock.freq().to_Hz());
 
     unsafe {
         DELAY = Some(delay);
     }
 
-    let mut led_pin = pins.led.into_push_pull_output();
     let timer = hal::Timer::new(pac.TIMER, &mut pac.RESETS);
+
+    unsafe {
+        TIMER = Some(timer);
+    }
+
+    let timer_ref = unsafe { TIMER.as_ref().unwrap() };
+    let mut led_pin = pins.led.into_push_pull_output();
     let led_freq = 100.millis();
-    let mut led_counter = timer.count_down();
+    let mut led_counter = timer_ref.count_down();
     led_counter.start(led_freq);
 
-    let mut ping_counter = timer.count_down();
-    let ping_freq = 1000.millis();
-    ping_counter.start(ping_freq);
+    let mut try_usb_timer = timer_ref.count_down();
+    try_usb_timer.start(1000.millis());
+
+    let mut do_run_day_timer = timer_ref.count_down();
+    do_run_day_timer.start(5_000.millis());
+
+    let mut did_init_usb = false;
 
     loop {
         if let Ok(_) = led_counter.wait() {
@@ -199,19 +232,25 @@ fn main() -> ! {
             }
         }
 
-        if let Ok(_) = ping_counter.wait() {
+        poll_usb_serial();
+
+        if !did_init_usb {
+            if let Err(_) = try_usb_timer.wait() {
+                continue;
+            }
+            if let Err(_) = serial_ref.write("Serial ready!\r\n".as_bytes()) {
+                continue;
+            }
+            did_init_usb = true;
+        }
+
+        if let Ok(_) = do_run_day_timer.wait() {
             // run_day(day01::DAY_01);
             // run_day(day02::DAY_02);
             // run_day(day03::DAY_03);
             // run_day(day04::DAY_04);
-            run_day(day05::DAY_05);
-        }
-
-        if usb_dev_ref.poll(&mut [serial_ref]) {
-            let mut buffer = [0u8; 64];
-
-            // read from the serial port and discard the data.
-            serial_ref.read(&mut buffer);
+            // run_day(day05::DAY_05);
+            run_day(day06::DAY_06);
         }
     }
 }
