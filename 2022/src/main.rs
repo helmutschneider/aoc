@@ -5,6 +5,7 @@ mod day01;
 mod day02;
 mod day03;
 mod day04;
+mod day05;
 
 mod util;
 
@@ -202,7 +203,8 @@ fn main() -> ! {
             // run_day(day01::DAY_01);
             // run_day(day02::DAY_02);
             // run_day(day03::DAY_03);
-            run_day(day04::DAY_04);
+            // run_day(day04::DAY_04);
+            run_day(day05::DAY_05);
         }
 
         if usb_dev_ref.poll(&mut [serial_ref]) {
