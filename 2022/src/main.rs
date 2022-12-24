@@ -7,6 +7,7 @@ mod day03;
 mod day04;
 mod day05;
 mod day06;
+mod day07;
 
 mod util;
 
@@ -30,11 +31,8 @@ static mut USB_BUS: Option<UsbBusAllocator<hal::usb::UsbBus>> = None;
 static mut USB_SERIAL: Option<SerialPort<hal::usb::UsbBus>> = None;
 static mut TIMER: Option<hal::Timer> = None;
 
-type String = heapless::String<8192>;
-type Vec<T, const N: usize> = heapless::Vec<T, N>;
-
 fn _write_usb_serial(value: &str, with_newline: bool) -> Option<()> {
-    let mut formatted = String::new();
+    let mut formatted = heapless::String::<512>::new();
 
     // the serial terminal apparently wants '\r\n' as the line break.
     let mut prev: char = '\0';
@@ -76,8 +74,9 @@ macro_rules! print {
     ($($x:tt)*) => {{
         use core::fmt::Write;
         use crate::_write_usb_serial;
+        use heapless::String;
 
-        let mut s = String::new();
+        let mut s = String::<512>::new();
         let _ = write!(&mut s, $($x)*);
         _write_usb_serial(&s, false);
     }};
@@ -88,8 +87,9 @@ macro_rules! println {
     ($($x:tt)*) => {{
         use core::fmt::Write;
         use crate::_write_usb_serial;
+        use heapless::String;
 
-        let mut s = String::new();
+        let mut s = String::<512>::new();
         let _ = write!(&mut s, $($x)*);
         _write_usb_serial(&s, true);
     }};
@@ -250,7 +250,8 @@ fn main() -> ! {
             // run_day(day03::DAY_03);
             // run_day(day04::DAY_04);
             // run_day(day05::DAY_05);
-            run_day(day06::DAY_06);
+            // run_day(day06::DAY_06);
+            run_day(day07::DAY_07);
         }
     }
 }
