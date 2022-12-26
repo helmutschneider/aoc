@@ -4,10 +4,10 @@ use crate::{
 };
 use heapless::Vec;
 
-pub const DAY_10: Day<i32> = Day {
+pub const DAY_10: Day<heapless::String<512>> = Day {
     year: 2022,
     day: 10,
-    parts: &[do_part_1],
+    parts: &[do_part_1, do_part_2],
     tests: &[
         test_parsing,
         test_execute_cycles_one_at_a_time,
@@ -50,11 +50,44 @@ fn parse_instructions<'a>(data: &'a str) -> impl Iterator<Item = Instruction> + 
     return iter;
 }
 
-fn do_part_1() -> i32 {
+fn do_part_1() -> heapless::String<512> {
     let instructions: Vec<Instruction, 256> = parse_instructions(INPUT).collect();
     let sum = get_signal_strength_after_220_cycles(instructions);
 
-    return sum;
+    return heapless::String::from(sum);
+}
+
+fn do_part_2() -> heapless::String<512> {
+    let instructions: Vec<Instruction, 256> = parse_instructions(INPUT).collect();
+    let mut machine = Machine::new(instructions);
+    let mut pixels = ['.'; 240];
+
+    while !machine.instructions.is_empty() || machine.current_instruction.is_some() {
+        let sprite_left = machine.X - 1;
+        let sprite_right = machine.X + 1;
+        let position_in_row = machine.executed_cycles % 40;
+        let should_draw_pixel = position_in_row >= sprite_left && position_in_row <= sprite_right;
+
+        if should_draw_pixel {
+            let row_offset = (machine.executed_cycles / 40) * 40;
+            pixels[(row_offset + position_in_row) as usize] = '#';
+        }
+
+        machine.execute_cycles(1);
+    }
+
+    let mut s: heapless::String<512> = heapless::String::from("\n");
+
+    for k in 0..pixels.len() {
+        let pixel = pixels[k];
+        s.push(pixel).unwrap();
+
+        if (k + 1) % 40 == 0 {
+            s.push('\n').unwrap();
+        }
+    }
+
+    return s;
 }
 
 fn test_parsing() {
