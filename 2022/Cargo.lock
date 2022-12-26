@@ -19,6 +19,8 @@ dependencies = [
  "cortex-m-rt",
  "embedded-hal",
  "fugit",
+ "hash32",
+ "hash32-derive",
  "heapless",
  "rp-pico",
  "usb-device",
@@ -191,6 +193,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b0c35f58762feb77d74ebe43bdbc3210f09be9fe6742234d573bacc26ed92b67"
 dependencies = [
  "byteorder",
+]
+
+[[package]]
+name = "hash32-derive"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "59d2aba832b60be25c1b169146b27c64115470981b128ed84c8db18c1b03c6ff"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]
