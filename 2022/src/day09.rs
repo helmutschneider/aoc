@@ -1,48 +1,52 @@
 use crate::util::Day;
-use heapless::FnvIndexSet;
-use heapless::Vec;
+use heapless::{FnvIndexSet, Vec};
 
 pub const DAY_09: Day<i32> = Day {
     year: 2022,
     day: 9,
-    parts: &[do_part_1, do_part_2],
+    parts: &[do_part::<2>, do_part::<10>],
     tests: &[parses_correctly, do_move_1, do_move_with_many_propagations],
 };
 
-fn do_part_1() -> i32 {
-    let mut rope = Rope::<2>::new();
-    let moves = parse_moves::<2048>(INPUT);
-    let mut visited_tail_points: FnvIndexSet<Point, 4096> = FnvIndexSet::new();
+fn do_part<const N: usize>() -> i32 {
+    let mut rope = Rope::<N>::new();
+    let moves = parse_moves(INPUT);
+
+    // this should be a set but heapless::FnvIndexSet<T, N> requires
+    // the size to be a power of two. we need at least 6000 slots,
+    // so our minimum size would be 8192 if we use a single set.
+    // however, that causes us to run out of memory.
+    let mut visited_tail_points_a: FnvIndexSet<Point, 4096> = FnvIndexSet::new();
+    let mut visited_tail_points_b: FnvIndexSet<Point, 2048> = FnvIndexSet::new();
 
     for mv in moves {
         for _ in 0..mv.steps {
             rope.move_to_direction(mv.direction);
-            visited_tail_points.insert(rope.tail());
+
+            let tail = rope.tail();
+
+            let is_visited =
+                visited_tail_points_a.contains(&tail) || visited_tail_points_b.contains(&tail);
+
+            if !is_visited {
+                if visited_tail_points_a.capacity() == visited_tail_points_a.len() {
+                    if visited_tail_points_b.capacity() == visited_tail_points_b.len() {
+                        panic!("Both sets are full.");
+                    }
+                    visited_tail_points_b.insert(tail).unwrap();
+                } else {
+                    visited_tail_points_a.insert(tail).unwrap();
+                }
+            }
         }
     }
 
-    return visited_tail_points.len() as i32;
+    return (visited_tail_points_a.len() + visited_tail_points_b.len()) as i32;
 }
 
-fn do_part_2() -> i32 {
-    let mut rope = Rope::<10>::new();
-    let moves = parse_moves::<2048>(INPUT);
-    let mut visited_tail_points: FnvIndexSet<Point, 4096> = FnvIndexSet::new();
-
-    for mv in moves {
-        for _ in 0..mv.steps {
-            rope.move_to_direction(mv.direction);
-            visited_tail_points.insert(rope.tail());
-        }
-    }
-
-    return visited_tail_points.len() as i32;
-}
-
-fn parse_moves<const N: usize>(data: &str) -> Vec<Move, N> {
-    let mut moves: Vec<Move, N> = Vec::new();
-
-    for line in data.trim().lines() {
+fn parse_moves<'a>(data: &'a str) -> impl Iterator<Item = Move> + 'a {
+    let lines = data.trim().lines();
+    let iter = crate::util::FnIterator::new(lines, |line| {
         let (d, steps) = line.split_once(" ").unwrap();
         let direction = match d {
             "R" => Direction::Right,
@@ -56,10 +60,10 @@ fn parse_moves<const N: usize>(data: &str) -> Vec<Move, N> {
             direction,
             steps: steps.parse().unwrap(),
         };
-        moves.push(mv);
-    }
+        return mv;
+    });
 
-    return moves;
+    return iter;
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -73,7 +77,7 @@ enum Direction {
 #[derive(Debug, Clone, Copy)]
 struct Move {
     direction: Direction,
-    steps: i32,
+    steps: i16,
 }
 
 #[derive(Debug)]
@@ -160,8 +164,8 @@ impl<const N: usize> Rope<N> {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, hash32_derive::Hash32)]
 struct Point {
-    x: i32,
-    y: i32,
+    x: i16,
+    y: i16,
 }
 
 impl Point {
@@ -182,7 +186,7 @@ R 2
 "#;
 
 fn parses_correctly() {
-    let moves = parse_moves::<16>(TEST_INPUT);
+    let moves: Vec<Move, 16> = parse_moves(TEST_INPUT).collect();
 
     assert_eq!(8, moves.len());
     assert_eq!(Direction::Right, moves[0].direction);
@@ -190,7 +194,7 @@ fn parses_correctly() {
 }
 
 fn do_move_1() {
-    let moves = parse_moves::<16>(TEST_INPUT);
+    let moves: Vec<Move, 16> = parse_moves(TEST_INPUT).collect();
     let mut rope = Rope::<2>::new();
 
     rope.move_steps(moves[0]);
@@ -211,7 +215,7 @@ fn do_move_1() {
 }
 
 fn do_move_with_many_propagations() {
-    let moves = parse_moves::<16>(TEST_INPUT);
+    let moves: Vec<Move, 16> = parse_moves(TEST_INPUT).collect();
     let mut rope = Rope::<10>::new();
 
     rope.move_steps(moves[0]);

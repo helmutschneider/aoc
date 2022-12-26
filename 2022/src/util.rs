@@ -14,3 +14,26 @@ pub fn max<T: PartialOrd>(a: T, b: T) -> T {
 pub fn min<T: PartialOrd>(a: T, b: T) -> T {
     return if a > b { b } else { a };
 }
+
+pub struct FnIterator<I: Iterator, R, F: FnMut(I::Item) -> R> {
+    inner: I,
+    f: F,
+}
+
+impl<I: Iterator, R, F: FnMut(I::Item) -> R> FnIterator<I, R, F> {
+    pub fn new(iter: I, f: F) -> Self {
+        return Self { inner: iter, f };
+    }
+}
+
+impl<I: Iterator, R, F: FnMut(I::Item) -> R> Iterator for FnIterator<I, R, F> {
+    type Item = R;
+
+    fn next(&mut self) -> Option<R> {
+        if let Some(x) = self.inner.next() {
+            let value = (self.f)(x);
+            return Some(value);
+        }
+        return None;
+    }
+}
