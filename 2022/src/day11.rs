@@ -1,7 +1,4 @@
-use crate::{
-    println,
-    util::{get_primes, Day},
-};
+use crate::{println, util::Day};
 use heapless::{FnvIndexSet, Vec};
 
 pub const DAY_11: Day<i64> = Day {
@@ -11,11 +8,9 @@ pub const DAY_11: Day<i64> = Day {
     tests: &[test_parsing, test_simluate, test_simluate_part_2],
 };
 
-const PRIMES: [i64; 512] = get_primes();
-
 fn do_part_1() -> i64 {
     let mut monkeys = parse_monkeys(INPUT);
-    do_monkey_simulation_part_1(&mut monkeys, 20);
+    do_monkey_simulation(&mut monkeys, 20, &mut |w| w / 3);
 
     monkeys.sort_unstable_by(|a, b| b.inspected_items.cmp(&a.inspected_items));
 
@@ -24,14 +19,19 @@ fn do_part_1() -> i64 {
 
 fn do_part_2() -> i64 {
     let mut monkeys = parse_monkeys(INPUT);
-    do_monkey_simulation_part_2(&mut monkeys, 10_000);
+    let factor: i64 = monkeys.iter().map(|m| m.test_divisible_by).product();
+    do_monkey_simulation(&mut monkeys, 10_000, &mut |w| w % factor);
 
     monkeys.sort_unstable_by(|a, b| b.inspected_items.cmp(&a.inspected_items));
 
     return (monkeys[0].inspected_items as i64) * (monkeys[1].inspected_items as i64);
 }
 
-fn do_monkey_simulation_part_1(monkeys: &mut Vec<Monkey, 16>, rounds: i32) {
+fn do_monkey_simulation<F: FnMut(i64) -> i64>(
+    monkeys: &mut Vec<Monkey, 16>,
+    rounds: i32,
+    transform_worry_level: &mut F,
+) {
     for round in 0..rounds {
         for monkey_index in 0..monkeys.len() {
             let monkey = monkeys[monkey_index].clone();
@@ -44,7 +44,7 @@ fn do_monkey_simulation_part_1(monkeys: &mut Vec<Monkey, 16>, rounds: i32) {
                     Operation::Multiply(Argument::Old, Argument::Integer(value)) => item * value,
                     _ => panic!("Bad operation! {:?}", monkey.operation),
                 };
-                next_item = next_item / 3;
+                next_item = transform_worry_level(next_item);
 
                 let to_index: usize = if next_item % monkey.test_divisible_by == 0 {
                     monkey.throw_to_if_true as usize
@@ -56,65 +56,6 @@ fn do_monkey_simulation_part_1(monkeys: &mut Vec<Monkey, 16>, rounds: i32) {
                 monkeys[monkey_index].inspected_items += 1;
                 monkeys[to_index].items.push(next_item).unwrap();
             }
-        }
-    }
-}
-
-fn do_monkey_simulation_part_2(monkeys: &mut Vec<Monkey, 16>, rounds: i32) {
-    let keep_prime_factors: heapless::FnvIndexSet<i64, 32> =
-        monkeys.iter().map(|m| m.test_divisible_by).collect();
-
-    // let largest_prime_factor = keep_prime_factors.iter().map(|n| *n).max().unwrap();
-    let stuff_to_keep: i64 = keep_prime_factors.iter().product();
-
-    for round in 0..rounds {
-        for monkey_index in 0..monkeys.len() {
-            let monkey = monkeys[monkey_index].clone();
-
-            for item in monkey.items {
-                let mut next_item = match monkey.operation {
-                    Operation::Add(Argument::Old, Argument::Old) => item + item,
-                    Operation::Add(Argument::Old, Argument::Integer(value)) => item + value,
-                    Operation::Multiply(Argument::Old, Argument::Old) => item * item,
-                    Operation::Multiply(Argument::Old, Argument::Integer(value)) => item * value,
-                    _ => panic!("Bad operation! {:?}", monkey.operation),
-                };
-
-                let to_index: usize = if next_item % monkey.test_divisible_by == 0 {
-                    monkey.throw_to_if_true as usize
-                } else {
-                    monkey.throw_to_if_false as usize
-                };
-
-                let can_factorize_for_next_monkey = match monkeys[to_index].operation {
-                    Operation::Multiply(_, _) => true,
-                    _ => false,
-                };
-
-                if can_factorize_for_next_monkey {
-                    for p in PRIMES {
-                        if keep_prime_factors.contains(&p) {
-                            continue;
-                        }
-
-                        while next_item % p == 0 {
-                            let next = next_item / p;
-                            if next < stuff_to_keep {
-                                break;
-                            }
-                            next_item = next_item / p;
-                        }
-                    }
-                }
-
-                monkeys[monkey_index].items.clear();
-                monkeys[monkey_index].inspected_items += 1;
-                monkeys[to_index].items.push(next_item).unwrap();
-            }
-        }
-
-        if round % 100 == 0 {
-            println!("Round = {}", round);
         }
     }
 }
@@ -276,7 +217,7 @@ fn test_parsing() {
 fn test_simluate() {
     let mut monkeys = parse_monkeys(TEST_INPUT_BRUH);
 
-    do_monkey_simulation_part_1(&mut monkeys, 1);
+    do_monkey_simulation(&mut monkeys, 1, &mut |w| w / 3);
 
     assert_eq!([20, 23, 27, 26], monkeys[0].items);
     assert_eq!([2080, 25, 167, 207, 401, 1046], monkeys[1].items);
@@ -285,11 +226,10 @@ fn test_simluate() {
 }
 
 fn test_simluate_part_2() {
-    // println!("{:?}", PRIMES);
-
     let mut monkeys = parse_monkeys(TEST_INPUT_BRUH);
+    let factor: i64 = monkeys.iter().map(|m| m.test_divisible_by).product();
 
-    do_monkey_simulation_part_2(&mut monkeys, 20);
+    do_monkey_simulation(&mut monkeys, 20, &mut |w| w % factor);
 
     assert_eq!(99, monkeys[0].inspected_items);
     assert_eq!(97, monkeys[1].inspected_items);
