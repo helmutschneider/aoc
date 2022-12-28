@@ -1,10 +1,6 @@
 use crate::println;
 use crate::util::Day;
-use core::fmt::Write;
-use heapless::binary_heap::Min;
 use heapless::BinaryHeap;
-use heapless::FnvIndexSet;
-use heapless::Vec;
 
 pub const DAY_12: Day<i16> = Day {
     year: 2022,
@@ -15,7 +11,7 @@ pub const DAY_12: Day<i16> = Day {
 
 fn do_part_1() -> i16 {
     let map = parse_map::<114, 41>(INPUT);
-    let path = find_steps_of_shortest_path(&map, map.start);
+    let path = find_steps_of_shortest_path(map, map.start);
     return path;
 }
 
@@ -28,7 +24,7 @@ fn do_part_2() -> i16 {
         for x in 0..114 {
             let node = map.nodes[y][x];
             if node.height == 0 {
-                let path = find_steps_of_shortest_path(&map, node.position);
+                let path = find_steps_of_shortest_path(map, node.position);
                 min = crate::util::min(min, path);
             }
 
@@ -50,6 +46,16 @@ struct HeightMap<const X: usize, const Y: usize> {
     end: Point,
 }
 
+impl<const X: usize, const Y: usize> HeightMap<X, Y> {
+    fn get(&self, pt: Point) -> Node {
+        return self.nodes[pt.y as usize][pt.x as usize];
+    }
+
+    fn set(&mut self, pt: Point, node: Node) {
+        self.nodes[pt.y as usize][pt.x as usize] = node;
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct Node {
     distance: i16,
@@ -67,6 +73,18 @@ impl Node {
     };
 }
 
+impl PartialOrd for Node {
+    fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
+        return Some(self.cmp(other));
+    }
+}
+
+impl Ord for Node {
+    fn cmp(&self, other: &Self) -> core::cmp::Ordering {
+        return self.distance.cmp(&other.distance);
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, hash32_derive::Hash32)]
 struct Point {
     x: i8,
@@ -77,7 +95,6 @@ impl Point {
     fn new(x: i8, y: i8) -> Self {
         return Self { x, y };
     }
-
     const ZERO: Self = Self { x: 0, y: 0 };
 }
 
@@ -139,25 +156,38 @@ fn parse_map<const X: usize, const Y: usize>(data: &str) -> HeightMap<X, Y> {
 }
 
 fn find_steps_of_shortest_path<const X: usize, const Y: usize>(
-    map: &HeightMap<X, Y>,
+    map: HeightMap<X, Y>,
     start: Point,
 ) -> i16 {
-    let mut nodes = map.nodes;
-    let mut queue: Vec<Point, 256> = Vec::new();
+    let mut map = map;
+    let mut heap: BinaryHeap<Node, heapless::binary_heap::Min, 512> = BinaryHeap::new();
 
-    nodes[start.y as usize][start.x as usize].distance = 0;
+    let mut start_node = map.get(start);
+    start_node.distance = 0;
+    map.set(start, start_node);
+    heap.push(start_node).unwrap();
 
-    queue.push(start).unwrap();
-
-    while !queue.is_empty() {
-        let pt = queue.remove(0);
-        let node = nodes[pt.y as usize][pt.x as usize];
+    while let Some(copied_node) = heap.pop() {
+        let pt = copied_node.position;
+        let mut node = map.get(pt);
 
         if node.is_visited {
             continue;
         }
 
-        nodes[pt.y as usize][pt.x as usize].is_visited = true;
+        // when the distance of a node is updated we just re-add it
+        // to the heap, beucase we can't mutate the data inside.
+        // this means that some data in the heap might be out-of-date.
+        if node.distance != copied_node.distance {
+            continue;
+        }
+
+        if node.position == map.end {
+            break;
+        }
+
+        node.is_visited = true;
+        map.set(pt, node);
 
         let siblings = [
             Point::new(pt.x, pt.y - 1),
@@ -166,8 +196,6 @@ fn find_steps_of_shortest_path<const X: usize, const Y: usize>(
             Point::new(pt.x - 1, pt.y),
         ];
 
-        let mut queue_needs_sorting = false;
-
         for sibling_pt in siblings {
             if sibling_pt.x < 0 || (sibling_pt.x as usize) == X {
                 continue;
@@ -175,7 +203,7 @@ fn find_steps_of_shortest_path<const X: usize, const Y: usize>(
             if sibling_pt.y < 0 || (sibling_pt.y as usize) == Y {
                 continue;
             }
-            let sibling_node = nodes[sibling_pt.y as usize][sibling_pt.x as usize];
+            let mut sibling_node = map.get(sibling_pt);
             let can_move_to_sibling = (sibling_node.height - node.height) <= 1;
 
             if !can_move_to_sibling {
@@ -184,29 +212,25 @@ fn find_steps_of_shortest_path<const X: usize, const Y: usize>(
 
             let prev_distance = sibling_node.distance;
             let maybe_next_distance = node.distance + 1;
+            let mut should_add_to_heap = false;
 
             if maybe_next_distance <= prev_distance {
-                nodes[sibling_pt.y as usize][sibling_pt.x as usize].distance = maybe_next_distance;
-                queue_needs_sorting = true;
+                sibling_node.distance = maybe_next_distance;
+                map.set(sibling_pt, sibling_node);
+                should_add_to_heap = true;
             }
 
             if !sibling_node.is_visited {
-                queue.push(sibling_pt).unwrap();
-                queue_needs_sorting = true;
+                should_add_to_heap = true;
             }
-        }
 
-        if queue_needs_sorting {
-            queue.sort_unstable_by(|a, b| {
-                let node_a = nodes[a.y as usize][a.x as usize];
-                let node_b = nodes[b.y as usize][b.x as usize];
-                let res = node_a.distance.cmp(&node_b.distance);
-                return res;
-            });
+            if should_add_to_heap {
+                heap.push(sibling_node).unwrap();
+            }
         }
     }
 
-    return nodes[map.end.y as usize][map.end.x as usize].distance;
+    return map.get(map.end).distance;
 }
 
 fn path_to_string<const X: usize, const Y: usize>(path: &[Point]) -> heapless::String<512> {
@@ -257,7 +281,7 @@ fn test_parsing() {
 
 fn test_find_shortest_path() {
     let map = parse_map::<8, 5>(TEST_INPUT);
-    let path = find_steps_of_shortest_path(&map, map.start);
+    let path = find_steps_of_shortest_path(map, map.start);
 
     assert_eq!(31, path);
 }
