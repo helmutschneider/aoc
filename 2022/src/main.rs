@@ -12,6 +12,7 @@ mod day08;
 mod day09;
 mod day10;
 mod day11;
+mod day12;
 
 mod util;
 
@@ -259,7 +260,8 @@ fn main() -> ! {
             // run_day(day08::DAY_08);
             // run_day(day09::DAY_09);
             // run_day(day10::DAY_10);
-            run_day(day11::DAY_11);
+            // run_day(day11::DAY_11);
+            run_day(day12::DAY_12);
         }
     }
 }
