@@ -23,10 +23,18 @@ use cortex_m::prelude::*;
 use embedded_hal::digital::v2::OutputPin;
 use embedded_hal::digital::v2::StatefulOutputPin;
 use fugit::ExtU32;
+use fugit::RateExtU32;
 use rp_pico::entry;
 use rp_pico::hal;
 use rp_pico::hal::pac;
 use rp_pico::hal::prelude::*;
+use rp_pico::hal::{
+    clocks::{Clock, ClocksManager, InitError},
+    pll::setup_pll_blocking,
+    pll::PLLConfig,
+    watchdog::Watchdog,
+    xosc::setup_xosc_blocking,
+};
 use usb_device::{class_prelude::*, prelude::*};
 use usbd_serial::SerialPort;
 
@@ -149,12 +157,61 @@ fn poll_usb_serial() -> () {
     serial_ref.read(&mut buffer);
 }
 
+fn init_clocks_and_plls(
+    xosc_crystal_freq: u32,
+    xosc_dev: pac::XOSC,
+    clocks_dev: pac::CLOCKS,
+    pll_sys_dev: pac::PLL_SYS,
+    pll_usb_dev: pac::PLL_USB,
+    resets: &mut pac::RESETS,
+    watchdog: &mut Watchdog,
+    pll_config: PLLConfig,
+) -> Result<ClocksManager, InitError> {
+    let xosc = setup_xosc_blocking(xosc_dev, xosc_crystal_freq.Hz()).map_err(InitError::XoscErr)?;
+
+    // Configure watchdog tick generation to tick over every microsecond
+    watchdog.enable_tick_generation((xosc_crystal_freq / 1_000_000) as u8);
+
+    let mut clocks = ClocksManager::new(clocks_dev);
+
+    let pll_sys = setup_pll_blocking(
+        pll_sys_dev,
+        xosc.operating_frequency(),
+        pll_config,
+        &mut clocks,
+        resets,
+    )
+    .map_err(InitError::PllError)?;
+    let pll_usb = setup_pll_blocking(
+        pll_usb_dev,
+        xosc.operating_frequency(),
+        PLL_USB_48MHZ,
+        &mut clocks,
+        resets,
+    )
+    .map_err(InitError::PllError)?;
+
+    clocks
+        .init_default(&xosc, &pll_sys, &pll_usb)
+        .map_err(InitError::ClockError)?;
+    Ok(clocks)
+}
+
+const PLL_SYS_250MHZ: PLLConfig = PLLConfig {
+    vco_freq: fugit::HertzU32::MHz(1500),
+    refdiv: 1,
+    post_div1: 6,
+    post_div2: 1,
+};
+
 #[entry]
 fn main() -> ! {
     let mut pac = pac::Peripherals::take().unwrap();
     let core = pac::CorePeripherals::take().unwrap();
     let mut watchdog = hal::Watchdog::new(pac.WATCHDOG);
-    let clocks = hal::clocks::init_clocks_and_plls(
+
+    // a slight overclock of roughly 100%...
+    let clocks = init_clocks_and_plls(
         rp_pico::XOSC_CRYSTAL_FREQ,
         pac.XOSC,
         pac.CLOCKS,
@@ -162,6 +219,7 @@ fn main() -> ! {
         pac.PLL_USB,
         &mut pac.RESETS,
         &mut watchdog,
+        PLL_SYS_250MHZ,
     )
     .ok()
     .unwrap();
