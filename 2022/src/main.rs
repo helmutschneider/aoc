@@ -13,6 +13,7 @@ mod day09;
 mod day10;
 mod day11;
 mod day12;
+mod day13;
 
 mod util;
 
@@ -30,6 +31,7 @@ use rp_pico::hal::pac;
 use rp_pico::hal::prelude::*;
 use rp_pico::hal::{
     clocks::{Clock, ClocksManager, InitError},
+    pll::common_configs::PLL_USB_48MHZ,
     pll::setup_pll_blocking,
     pll::PLLConfig,
     watchdog::Watchdog,
@@ -319,7 +321,8 @@ fn main() -> ! {
             // run_day(day09::DAY_09);
             // run_day(day10::DAY_10);
             // run_day(day11::DAY_11);
-            run_day(day12::DAY_12);
+            // run_day(day12::DAY_12);
+            run_day(day13::DAY_13);
         }
     }
 }
