@@ -9,7 +9,7 @@ use heapless::Vec;
 pub const DAY_13: Day<i32> = Day {
     year: 2022,
     day: 13,
-    parts: &[do_part_1],
+    parts: &[do_part_1, do_part_2],
     tests: &[
         test_read_integer,
         test_read_list_of_integers,
@@ -17,42 +17,96 @@ pub const DAY_13: Day<i32> = Day {
         test_verify_pairs,
         test_parse_weird_stuff,
         test_find_sum_of_verified_indices,
-        // test_print_thingy,
+        test_verify_equal_length_lists,
+        test_find_indices_of_divider_packets,
+        // test_sort,
     ],
 };
 
-fn test_print_thingy() {
-    unsafe {
-        A::grow(&mut MEMORY);
-    }
-
-    let pairs: Vec<(Value, Value), 64> = PairIterator {
-        lines: TEST_INPUT.trim().lines(),
-    }
-    .collect();
-
-    let pair = &pairs[7];
-
-    let ok = verify_pair(&pair.0, &pair.1);
-
-    assert_eq!(VerifyResult::Err, ok);
-}
-
-type Elements = heapless::Vec<Box<A>, 32>;
-
-#[derive(Debug, PartialEq)]
-pub enum Value {
-    Integer(i8),
-    List(Elements),
-}
-
-pool!(A: Value);
-
+type Elements = heapless::Vec<Packet, 16>;
+pool!(A: Elements);
 static mut MEMORY: [u8; 32_768] = [0; 32_768];
+
+#[derive(Debug)]
+pub enum Packet {
+    Integer(i8),
+    List(Box<A>),
+}
+
+impl PartialEq for Packet {
+    fn eq(&self, other: &Self) -> bool {
+        return match (self, other) {
+            (Packet::Integer(a), Packet::Integer(b)) => a == b,
+            (Packet::List(a), Packet::List(b)) => {
+                if a.len() != b.len() {
+                    return false;
+                }
+                for k in 0..a.len() {
+                    if a[k] != b[k] {
+                        return false;
+                    }
+                }
+                return true;
+            }
+            _ => false,
+        };
+    }
+}
+
+impl Eq for Packet {}
+
+impl PartialOrd for Packet {
+    fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
+        return Some(self.cmp(other));
+    }
+}
+
+impl Ord for Packet {
+    fn cmp(&self, other: &Self) -> core::cmp::Ordering {
+        return match (self, other) {
+            (Packet::Integer(a), Packet::Integer(b)) => a.cmp(b),
+            (Packet::List(a), Packet::List(b)) => {
+                for k in 0..a.len() {
+                    let element_left = &a[k];
+                    let maybe_element_right = b.get(k);
+                    if maybe_element_right.is_none() {
+                        return core::cmp::Ordering::Greater;
+                    }
+                    let res = element_left.cmp(maybe_element_right.unwrap());
+                    if res != core::cmp::Ordering::Equal {
+                        return res;
+                    }
+                }
+
+                // we iterated through both A and B but could not find a conclusive
+                // answer. if they are both of the same length we must continue checking.
+                // otherwise, we know that A is smaller so we can return OK.
+                if a.len() == b.len() {
+                    return core::cmp::Ordering::Equal;
+                }
+
+                return core::cmp::Ordering::Less;
+            }
+            (Packet::Integer(a), Packet::List(_)) => {
+                let mut elems = Elements::new();
+                let element_a = Packet::Integer(*a);
+                elems.push(element_a).unwrap();
+                let left_as_list = Packet::List(A::alloc().unwrap().init(elems));
+                return left_as_list.cmp(other);
+            }
+            (Packet::List(_), Packet::Integer(b)) => {
+                let mut elems = Elements::new();
+                let element_b = Packet::Integer(*b);
+                elems.push(element_b).unwrap();
+                let right_as_list = Packet::List(A::alloc().unwrap().init(elems));
+                return self.cmp(&right_as_list);
+            }
+        };
+    }
+}
 
 fn do_part_1() -> i32 {
     unsafe {
-        MEMORY = [0; 32_768];
         A::grow(&mut MEMORY);
     }
     let sum = find_indices_of_verified_pairs::<256>(INPUT).iter().sum();
@@ -60,19 +114,99 @@ fn do_part_1() -> i32 {
     return sum;
 }
 
+fn do_part_2() -> i32 {
+    unsafe {
+        A::grow(&mut MEMORY);
+    }
+    let (a, b) = find_indices_of_divider_packets::<512>(INPUT);
+
+    return a * b;
+}
+
+struct PacketIterator<'a> {
+    lines: core::str::Lines<'a>,
+}
+
+impl<'a> PacketIterator<'a> {
+    fn new(data: &'a str) -> Self {
+        return Self {
+            lines: data.trim().lines(),
+        };
+    }
+}
+
+impl<'a> Iterator for PacketIterator<'a> {
+    type Item = Packet;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let mut maybe_line = self.lines.next();
+        while maybe_line.is_some() && maybe_line.unwrap().trim() == "" {
+            maybe_line = self.lines.next();
+        }
+        return match maybe_line {
+            Some(line) => Some(read_value(line)),
+            None => None,
+        };
+    }
+}
+
 fn find_indices_of_verified_pairs<const N: usize>(data: &str) -> Vec<i32, N> {
-    let pairs = PairIterator {
-        lines: data.trim().lines(),
-    };
+    let mut k: i32 = 1;
+    let mut iter = PacketIterator::new(data);
     let mut out: Vec<i32, N> = Vec::new();
 
-    for (k, (a, b)) in pairs.enumerate() {
-        if verify_pair(&a, &b) == VerifyResult::Ok {
-            out.push((k + 1) as i32).unwrap();
+    while let Some(left) = iter.next() {
+        let maybe_right = iter.next();
+
+        if maybe_right == None {
+            panic!("Could not find right packet!");
         }
+
+        let right = maybe_right.unwrap();
+
+        if left.cmp(&right) == core::cmp::Ordering::Less {
+            out.push(k).unwrap();
+        }
+
+        k += 1;
     }
 
     return out;
+}
+
+const DIVIDER_PACKET_1: &'static str = "[[2]]";
+const DIVIDER_PACKET_2: &'static str = "[[6]]";
+
+fn find_indices_of_divider_packets<const N: usize>(data: &str) -> (i32, i32) {
+    let mut lines: Vec<&str, N> = data.trim().lines().filter(|line| *line != "").collect();
+    lines.push(DIVIDER_PACKET_1).unwrap();
+    lines.push(DIVIDER_PACKET_2).unwrap();
+
+    lines.sort_unstable_by(|a, b| {
+        // we don't have enough ram to keep the parsed values in memory.
+        let packet_a = read_value(a);
+        let packet_b = read_value(b);
+
+        return packet_a.cmp(&packet_b);
+    });
+
+    let mut index_a: Option<i32> = None;
+    let mut index_b: Option<i32> = None;
+
+    for k in 0..lines.len() {
+        let line = lines[k];
+
+        if line == DIVIDER_PACKET_1 {
+            index_a = Some((k + 1) as i32);
+        } else if line == DIVIDER_PACKET_2 {
+            index_b = Some((k + 1) as i32);
+        }
+        if index_a.is_some() && index_b.is_some() {
+            break;
+        }
+    }
+
+    return (index_a.unwrap(), index_b.unwrap());
 }
 
 fn read_list(data: &str, start_index: usize) -> (Elements, usize) {
@@ -87,8 +221,7 @@ fn read_list(data: &str, start_index: usize) -> (Elements, usize) {
 
         while k < end_index {
             let (el, next_index) = read_value_from_index(data, k);
-            let boxed = A::alloc().unwrap().init(el);
-            elements.push(boxed).unwrap();
+            elements.push(el).unwrap();
             k = next_index;
 
             if bytes[k] == b',' {
@@ -133,20 +266,21 @@ fn read_integer(data: &str, start_index: usize) -> (i8, usize) {
     return (found, k);
 }
 
-fn read_value_from_index(data: &str, start_index: usize) -> (Value, usize) {
+fn read_value_from_index(data: &str, start_index: usize) -> (Packet, usize) {
     let bytes = data.as_bytes();
     let start_index = skip_whitespace(data, start_index);
 
     if bytes[start_index] == b'[' {
         let (elements, next) = read_list(data, start_index);
-        return (Value::List(elements), next);
+        let boxed = A::alloc().unwrap().init(elements);
+        return (Packet::List(boxed), next);
     }
 
     let (int, next) = read_integer(data, start_index);
-    return (Value::Integer(int), next);
+    return (Packet::Integer(int), next);
 }
 
-fn read_value(data: &str) -> Value {
+fn read_value(data: &str) -> Packet {
     let (found, next_index) = read_value_from_index(data, 0);
 
     assert_eq!(data.len(), next_index);
@@ -173,91 +307,23 @@ fn find_closing_delimeter(data: &str, start_index: usize) -> Option<usize> {
     return None;
 }
 
-struct PairIterator<'a> {
-    lines: core::str::Lines<'a>,
-}
-
-impl<'a> Iterator for PairIterator<'a> {
-    type Item = (Value, Value);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let a = self.lines.next();
-        let b = self.lines.next();
-
-        if a == None {
-            if b == None {
-                return None;
-            }
-            panic!("Found lingering line!\n{}", a.unwrap());
-        }
-
-        let blank_or_end_of_file = self.lines.next();
-
-        assert!(blank_or_end_of_file == None || blank_or_end_of_file == Some(""));
-
-        let left = read_value(a.unwrap());
-        let right = read_value(b.unwrap());
-
-        return Some((left, right));
+fn packet_to_string<const N: usize>(value: &Packet, buffer: &mut heapless::String<N>) {
+    if let Packet::Integer(x) = value {
+        buffer.push_str(&heapless::String::<16>::from(*x)).unwrap();
     }
-}
+    if let Packet::List(elements) = value {
+        buffer.push('[').unwrap();
+        for i in 0..elements.len() {
+            let el = &elements[i];
+            packet_to_string(el, buffer);
 
-#[derive(Debug, Clone, Copy, PartialEq)]
-enum VerifyResult {
-    Inconclusive,
-    Ok,
-    Err,
-}
-
-fn verify_pair(left: &Value, right: &Value) -> VerifyResult {
-    return match (left, right) {
-        (Value::Integer(a), Value::Integer(b)) => {
-            if a == b {
-                return VerifyResult::Inconclusive;
+            let should_write_comma = i < (elements.len() - 1);
+            if should_write_comma {
+                buffer.push(',').unwrap();
             }
-            if a < b {
-                return VerifyResult::Ok;
-            }
-            return VerifyResult::Err;
         }
-        (Value::List(a), Value::List(b)) => {
-            for k in 0..a.len() {
-                let element_left = &a[k];
-                let maybe_element_right = b.get(k);
-                if maybe_element_right.is_none() {
-                    return VerifyResult::Err;
-                }
-                let res = verify_pair(&element_left, maybe_element_right.unwrap());
-                if res == VerifyResult::Inconclusive {
-                    continue;
-                }
-                return res;
-            }
-
-            // we iterated through both A and B but could not find a conclusive
-            // answer. if they are both of the same length we must continue checking.
-            // otherwise, we know that A is smaller so we can return OK.
-            if a.len() == b.len() {
-                return VerifyResult::Inconclusive;
-            }
-
-            return VerifyResult::Ok;
-        }
-        (Value::Integer(a), Value::List(_)) => {
-            let mut elems = Elements::new();
-            let element_a = Value::Integer(*a);
-            elems.push(A::alloc().unwrap().init(element_a)).unwrap();
-            let left_as_list = Value::List(elems);
-            return verify_pair(&left_as_list, right);
-        }
-        (Value::List(_), Value::Integer(b)) => {
-            let mut elems = Elements::new();
-            let element_b = Value::Integer(*b);
-            elems.push(A::alloc().unwrap().init(element_b)).unwrap();
-            let right_as_list = Value::List(elems);
-            return verify_pair(left, &right_as_list);
-        }
-    };
+        buffer.push(']').unwrap();
+    }
 }
 
 fn test_read_integer() {
@@ -282,8 +348,8 @@ fn test_read_list_of_integers() {
     let (elements, _) = read_list(list, 0);
 
     assert_eq!(2, elements.len());
-    assert_eq!(Value::Integer(42), *elements[0]);
-    assert_eq!(Value::Integer(69), *elements[1]);
+    assert_eq!(Packet::Integer(42), elements[0]);
+    assert_eq!(Packet::Integer(69), elements[1]);
 }
 
 fn test_read_nested_stuff() {
@@ -295,20 +361,14 @@ fn test_read_nested_stuff() {
     let mut elems = Elements::new();
     let mut inner = Elements::new();
 
-    inner
-        .push(A::alloc().unwrap().init(Value::Integer(69)))
-        .unwrap();
-    inner
-        .push(A::alloc().unwrap().init(Value::Integer(7)))
-        .unwrap();
+    inner.push(Packet::Integer(69)).unwrap();
+    inner.push(Packet::Integer(7)).unwrap();
 
+    elems.push(Packet::Integer(42)).unwrap();
     elems
-        .push(A::alloc().unwrap().init(Value::Integer(42)))
+        .push(Packet::List(A::alloc().unwrap().init(inner)))
         .unwrap();
-    elems
-        .push(A::alloc().unwrap().init(Value::List(inner)))
-        .unwrap();
-    let expected = Value::List(elems);
+    let expected = Packet::List(A::alloc().unwrap().init(elems));
 
     let value = read_value(list);
 
@@ -320,21 +380,27 @@ fn test_verify_pairs() {
         A::grow(&mut MEMORY);
     }
 
-    let pairs = PairIterator {
-        lines: TEST_INPUT.trim().lines(),
-    };
-    let results: Vec<VerifyResult, 32> = pairs.map(|(a, b)| verify_pair(&a, &b)).collect();
+    let packets: Vec<Packet, 32> = PacketIterator::new(TEST_INPUT).collect();
+    let results: Vec<core::cmp::Ordering, 32> = packets
+        .chunks(2)
+        .map(|chunk| {
+            let a = &chunk[0];
+            let b = &chunk[1];
+
+            return a.cmp(&b);
+        })
+        .collect();
 
     assert_eq!(
         [
-            VerifyResult::Ok,
-            VerifyResult::Ok,
-            VerifyResult::Err,
-            VerifyResult::Ok,
-            VerifyResult::Err,
-            VerifyResult::Ok,
-            VerifyResult::Err,
-            VerifyResult::Err,
+            core::cmp::Ordering::Less,
+            core::cmp::Ordering::Less,
+            core::cmp::Ordering::Greater,
+            core::cmp::Ordering::Less,
+            core::cmp::Ordering::Greater,
+            core::cmp::Ordering::Less,
+            core::cmp::Ordering::Greater,
+            core::cmp::Ordering::Greater,
         ],
         results
     );
@@ -348,12 +414,12 @@ fn test_parse_weird_stuff() {
     let a = read_value("[[[[7,9]],[[0,9]],0,[[2,1,1,2,9],4],[[5]]],[]]");
     let b = read_value("[[8]]");
 
-    if let Value::List(_) = a {
+    if let Packet::List(_) = a {
     } else {
         assert_eq!(1, 2);
     }
 
-    if let Value::List(_) = b {
+    if let Packet::List(_) = b {
     } else {
         assert_eq!(1, 2);
     }
@@ -367,6 +433,83 @@ fn test_find_sum_of_verified_indices() {
     let ok_indices = find_indices_of_verified_pairs::<16>(TEST_INPUT);
 
     assert_eq!([1, 2, 4, 6], ok_indices);
+}
+
+fn test_verify_equal_length_lists() {
+    unsafe {
+        A::grow(&mut MEMORY);
+    }
+    let data = "[1, 2, 3]";
+    let a = read_value(data);
+    let b = read_value(data);
+    let ok = a.cmp(&b);
+
+    assert_eq!(core::cmp::Ordering::Equal, ok);
+}
+
+/*
+fn test_sort() {
+    unsafe {
+        A::grow(&mut MEMORY);
+    }
+    let pairs = PairIterator {
+        lines: TEST_INPUT.trim().lines(),
+    };
+    let mut packets: Vec<Value, 32> = Vec::new();
+    for (a, b) in pairs {
+        packets.push(a).unwrap();
+        packets.push(b).unwrap();
+    }
+
+    let divider_packet_a = read_value("[[2]]");
+    let divider_packet_b = read_value("[[6]]");
+
+    packets.push(divider_packet_a).unwrap();
+    packets.push(divider_packet_b).unwrap();
+    packets.sort_unstable();
+
+    let mut res = heapless::String::<512>::new();
+
+    for p in packets {
+        let mut s = heapless::String::<64>::new();
+        packet_to_string(&p, &mut s);
+        res.push_str(&s).unwrap();
+        res.push('\n').unwrap();
+    }
+
+    let expected = r#"
+[]
+[[]]
+[[[]]]
+[1,1,3,1,1]
+[1,1,5,1,1]
+[[1],[2,3,4]]
+[1,[2,[3,[4,[5,6,0]]]],8,9]
+[1,[2,[3,[4,[5,6,7]]]],8,9]
+[[1],4]
+[[2]]
+[3]
+[[4,4],4,4]
+[[4,4],4,4,4]
+[[6]]
+[7,7,7]
+[7,7,7,7]
+[[8,7,6]]
+[9]
+    "#;
+
+    assert_eq!(expected.trim(), res.trim());
+}
+*/
+
+fn test_find_indices_of_divider_packets() {
+    unsafe {
+        A::grow(&mut MEMORY);
+    }
+    let (a, b) = find_indices_of_divider_packets::<32>(TEST_INPUT);
+
+    assert_eq!(10, a);
+    assert_eq!(14, b);
 }
 
 const TEST_INPUT: &'static str = r#"
