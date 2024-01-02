@@ -6,13 +6,20 @@ pub fn part1() {
 }
 
 pub fn part2() {
-
+    let sum = find_sum_of_gear_ratios(INPUT);
+    println!("D03P2: {}", sum);
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 struct Point {
     x: i64,
     y: i64,
+}
+
+impl Point {
+    fn new(x: i64, y: i64) -> Self {
+        return Point { x, y };
+    }
 }
 
 pub fn find_sum_of_part_numbers(schema: &str) -> i64 {
@@ -83,7 +90,7 @@ pub fn find_sum_of_part_numbers(schema: &str) -> i64 {
                 if pt.x < 0 || pt.y < 0 {
                     continue;
                 }
-                if let Some(byte) = lines.get(pt.y as usize).and_then(|line| line.as_bytes().get(pt.x as usize)) {
+                if let Some(byte) = lines.get(pt.y as usize).and_then(|line| line.trim().as_bytes().get(pt.x as usize)) {
                     let is_symbol = !byte.is_ascii_digit() && *byte != b'.';
                     if is_symbol {
                         sum += num;
@@ -99,27 +106,140 @@ pub fn find_sum_of_part_numbers(schema: &str) -> i64 {
     return sum;
 }
 
+#[derive(Debug, Clone, Copy)]
+struct Gear {
+    pt: Point,
+    num1: i64,
+    num2: i64,
+}
+
+pub fn find_sum_of_gear_ratios(schema: &str) -> i64 {
+    let lines: Vec<&str> = schema.trim().lines().collect();
+    let mut gears: Vec<Gear> = Vec::new();
+
+    for line_index in 0..lines.len() {
+        let line = lines[line_index].trim().as_bytes();
+        for col_index in 0..lines[line_index].trim().len() {
+            let byte = line[col_index];
+
+            if byte != b'*' {
+                continue;
+            }
+
+            let points_to_scan = vec![
+                Point::new(col_index as i64, line_index as i64 - 1, ),
+                Point::new(col_index as i64 + 1, line_index as i64 - 1, ),
+                Point::new(col_index as i64 + 1, line_index as i64, ),
+                Point::new(col_index as i64 + 1, line_index as i64 + 1, ),
+                Point::new(col_index as i64, line_index as i64 + 1, ),
+                Point::new(col_index as i64 - 1, line_index as i64 + 1, ),
+                Point::new(col_index as i64 - 1, line_index as i64, ),
+                Point::new(col_index as i64 - 1, line_index as i64 - 1, ),
+            ];
+
+            let mut nums: Vec<(Point, i64)> = Vec::new();
+
+            for pt in &points_to_scan {
+                if pt.x < 0 || pt.y < 0 {
+                    continue;
+                }
+                let line = lines.get(pt.y as usize);
+                if line.is_none() {
+                    continue;
+                }
+                let line = line.unwrap().trim().as_bytes();
+
+                let is_num = line.get(pt.x as usize)
+                    .map(|x| x.is_ascii_digit())
+                    .unwrap_or(false);
+
+                if is_num {
+                    let mut x_start = pt.x;
+                    let mut x_end = pt.x;
+
+                    // grow left bruh.
+                    for k in 0..pt.x {
+                        let x1 = pt.x - k - 1;
+                        let do_grow = line.get(x1 as usize)
+                            .map(|x| x.is_ascii_digit())
+                            .unwrap_or(false);
+                        if !do_grow {
+                            break;
+                        }
+                        x_start -= 1;
+                    }
+
+                    // grow right bruh.
+                    for k in (pt.x+1)..line.len() as i64 {
+                        let x1 = k;
+                        let do_grow = line.get(x1 as usize)
+                            .map(|x| x.is_ascii_digit())
+                            .unwrap_or(false);
+                        if !do_grow {
+                            break;
+                        }
+                        x_end += 1;
+                    }
+
+                    let s = &line[x_start as usize..=x_end as usize];
+                    let str = core::str::from_utf8(s).unwrap();
+                    let num: i64 = str.parse().unwrap();
+
+                    let pt = Point::new(x_start, pt.y);
+
+                    // since we're lazy and scan in a circle around the '*'
+                    // it's totally possible that we find the same number
+                    // several times.
+                    let already_scanned_number = nums.iter().any(|x| x.0 == pt);
+
+                    if !already_scanned_number {
+                        nums.push((pt, num));
+                    }
+                }
+            }
+
+            if nums.len() == 2 {
+                gears.push(Gear {
+                    pt: Point::new(col_index as i64, line_index as i64),
+                    num1: nums[0].1,
+                    num2: nums[1].1,
+                });
+            }
+        }
+    }
+
+    return gears.iter().map(|gear| gear.num1 * gear.num2).sum();
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    const TEST_INPUT: &'static str = r###"
+    467..114..
+    ...*......
+    ..35..633.
+    ......#...
+    617*......
+    .....+.58.
+    ..592.....
+    ......755.
+    ...$.*....
+    .664.598..
+            "###;
+
     #[test]
     fn should_find_part_numbers() {
-        let code = r###"
-467..114..
-...*......
-..35..633.
-......#...
-617*......
-.....+.58.
-..592.....
-......755.
-...$.*....
-.664.598..
-        "###;
-        let x = find_sum_of_part_numbers(code);
+        let x = find_sum_of_part_numbers(TEST_INPUT);
 
         assert_eq!(4361, x);
+    }
+
+    #[test]
+    fn should_find_gears() {
+        let sum = find_sum_of_gear_ratios(TEST_INPUT);
+
+        assert_eq!(467835, sum);
     }
 }
 
