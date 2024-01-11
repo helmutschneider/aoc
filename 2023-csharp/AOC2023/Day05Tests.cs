@@ -21,25 +21,44 @@ public class Day05Tests
     [InlineData(13, 35)]
     public void ShouldGetLocation(long seed, long expected)
     {
-        var (_, maps) = Day05.Parse(TEST_INPUT);
+        var (_, maps) = Day05.Parse(TEST_INPUT, Day05.Part.One);
         var loc = Day05.GetLocation(seed, maps);
 
         Assert.Equal(expected, loc);
     }
 
     [Fact]
-    public void DoThing()
+    public void PartOne()
     {
-        var (seeds, maps) = Day05.Parse(Day05.INPUT);
+        var (seeds, maps) = Day05.Parse(Day05.INPUT, Day05.Part.One);
         var lowest = long.MaxValue;
 
         foreach (var num in seeds.Nums)
         {
-            var loc = Day05.GetLocation(num, maps);
+            var loc = Day05.GetLocation(num.Start, maps);
             lowest = Math.Min(lowest, loc);
         }
 
         Output.WriteLine($"DAY05P1: {lowest}");
+    }
+
+    [Fact]
+    public void PartTwo()
+    {
+        var (seeds, maps) = Day05.Parse(Day05.INPUT, Day05.Part.Two);
+        var lowest = long.MaxValue;
+
+        foreach (var range in seeds.Nums)
+        {
+            // FIXME: this is dogshit slow. we need a smarter way to do this.
+            for (var i = range.Start; i < (range.Start + range.Length); ++i)
+            {
+                var loc = Day05.GetLocation(i, maps);
+                lowest = Math.Min(lowest, loc);
+            }
+        }
+
+        Output.WriteLine($"DAY05P2: {lowest}");
     }
 
     const string TEST_INPUT = @"

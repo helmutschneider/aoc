@@ -8,37 +8,46 @@ using System.Text.RegularExpressions;
 
 namespace AOC2023;
 
-public enum Category
-{
-    None = 0,
-    Seed,
-    Soil,
-    Fertilizer,
-    Water,
-    Light,
-    Temperature,
-    Humidity,
-    Location,
-}
-
-public record Map(Category From, Category To, IReadOnlyList<MapRange> Ranges);
-public record MapRange(long DestStart, long SourceStart, long Length)
-{
-    public long? MaybeGetMapping(long value)
-    {
-        var hasMapping = value >= this.SourceStart && value < (this.SourceStart + this.Length);
-        if (hasMapping)
-        {
-            var offset = value - this.SourceStart;
-            return this.DestStart + offset;
-        }
-        return null;
-    }
-}
-public record Seeds(IReadOnlyList<long> Nums);
-
 public static partial class Day05
 {
+    public enum Category
+    {
+        None = 0,
+        Seed,
+        Soil,
+        Fertilizer,
+        Water,
+        Light,
+        Temperature,
+        Humidity,
+        Location,
+    }
+
+    public enum Part
+    {
+        None = 0,
+        One,
+        Two,
+    }
+
+    public record Map(Category From, Category To, IReadOnlyList<MapRange> Ranges);
+    public record MapRange(long DestStart, long SourceStart, long Length)
+    {
+        public long? MaybeGetMapping(long value)
+        {
+            var hasMapping = value >= this.SourceStart && value < (this.SourceStart + this.Length);
+            if (hasMapping)
+            {
+                var offset = value - this.SourceStart;
+                return this.DestStart + offset;
+            }
+            return null;
+        }
+    }
+
+    public record SeedRange(long Start, long Length);
+    public record Seeds(IReadOnlyList<SeedRange> Nums);
+
     public static long GetLocation(long seed, IReadOnlyList<Map> maps)
     {
         var cat = Category.Seed;
@@ -84,11 +93,11 @@ public static partial class Day05
     [GeneratedRegex(@"^(\d+) (\d+) (\d+)")]
     private static partial Regex MapRangePattern();
 
-    public static (Seeds, IReadOnlyList<Map>) Parse(string input)
+    public static (Seeds, IReadOnlyList<Map>) Parse(string input, Part part)
     {
         using var stream = new MemoryStream(Encoding.UTF8.GetBytes(input));
         using var rdr = new StreamReader(stream);
-        var seedNumbers = new List<long>();
+        var seedNumbers = new List<SeedRange>();
         var maps = new List<Map>();
 
         while (!rdr.EndOfStream)
@@ -104,17 +113,31 @@ public static partial class Day05
             {
                 var parts = line.Split(":");
                 var nums = Regex.Split(parts[1].Trim(), @"\s+");
-                
-                foreach (var num in nums)
+
+                switch (part)
                 {
-                    seedNumbers.Add(long.Parse(num));
+                    case Part.One:
+                        foreach (var num in nums)
+                        {
+                            var start = long.Parse(num);
+                            seedNumbers.Add(new SeedRange(start, 1));
+                        }
+                        break;
+                    case Part.Two:
+                        for (var i = 0; i < nums.Length; i += 2)
+                        {
+                            var start = long.Parse(nums[i]);
+                            var len = long.Parse(nums[i + 1]);
+                            seedNumbers.Add(new SeedRange(start, len));
+                        }
+                        break;
                 }
 
                 continue;
             }
 
             var match = MapPattern().Match(line);
-            
+
             if (match?.Success == true)
             {
                 var from = match.Groups[1].Value;
