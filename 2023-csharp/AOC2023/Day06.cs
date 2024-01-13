@@ -6,10 +6,10 @@ using System.Text.RegularExpressions;
 
 namespace AOC2023;
 
-public record Race(long Time, long WinnerDistance);
-
 public static class Day06
 {
+    public record Race(long Time, long WinnerDistance);
+
     public static IReadOnlyList<Race> ParsePartOne(string input)
     {
         var lines = input.Trim()
