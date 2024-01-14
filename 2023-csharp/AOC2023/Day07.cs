@@ -3,11 +3,19 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace AOC2023;
 
 public class Day07
 {
+    readonly ITestOutputHelper Output;
+
+    public Day07(ITestOutputHelper output)
+    {
+        this.Output = output;
+    }
+
     enum Part
     {
         None = 0,
@@ -68,7 +76,7 @@ public class Day07
         public record OnePair(Card Card) : HandType(1);
         public record HighCard(Card Card) : HandType(0);
 
-        public static HandType FromHand(Hand hand)
+        public static HandType FromHand(Hand hand, Part part)
         {
             var numCards = new Dictionary<Card, int>();
             foreach (var card in hand.Cards)
@@ -80,13 +88,17 @@ public class Day07
                 numCards[card] += 1;
             }
 
-            var numJokers = numCards
-                .Where(x => x.Key == Card.Joker)
+            var sortedCards = hand.Cards
+                .OrderDescending();
+
+            var numJokers = hand.Cards
+                .Where(x => x == Card.Joker)
                 .Count();
-                
-            var fiveOfAKindCard = numCards
-                .Where(x => x.Value == 5)
-                .Select(x => x.Key)
+
+            var maybeAddJokers = (Card card) => numCards.GetValueOrDefault(card, 0)
+                + (card == Card.Joker ? 0 : numJokers);
+            var fiveOfAKindCard = sortedCards
+                .Where(x => maybeAddJokers(x) == 5)
                 .FirstOrDefault();
 
             if (fiveOfAKindCard != Card.None)
@@ -94,40 +106,56 @@ public class Day07
                 return new FiveOfAKind(fiveOfAKindCard);
             }
 
-            var fourOfAKindCard = numCards
-                .Where(x => x.Value == 4)
-                .Select(x => x.Key)
+            var fourOfAKindCard = sortedCards
+                .Where(x => maybeAddJokers(x) == 4)
                 .FirstOrDefault();
-            
+
             if (fourOfAKindCard != Card.None)
             {
                 return new FourOfAKind(fourOfAKindCard);
             }
 
-            var threeOfAKindCard = numCards
-                .Where(x => x.Value == 3)
-                .Select(x => x.Key)
+            var threeOfAKindCard = sortedCards
+                .Where(x => numCards.GetValueOrDefault(x, 0) + numJokers == 3)
                 .FirstOrDefault();
-
-            var firstPairCard = numCards
-                .Where(x => x.Value == 2)
-                .Select(x => x.Key)
-                .FirstOrDefault();
-
-            if (threeOfAKindCard != Card.None && firstPairCard != Card.None)
-            {
-                return new FullHouse(firstPairCard, threeOfAKindCard);
-            }
 
             if (threeOfAKindCard != Card.None)
             {
+                // the pair in a full house must not be affected by jokers, since
+                // logically that requires two of them, which would turn this into
+                // a four-of-a-kind instead.
+                var pairCard = sortedCards
+                    .Where(x => x != Card.Joker && x != threeOfAKindCard && numCards.GetValueOrDefault(x, 0) == 2)
+                    .FirstOrDefault();
+
+                if (pairCard != Card.None)
+                {
+                    return new FullHouse(pairCard, threeOfAKindCard);
+                }
+
                 return new ThreeOfAKind(threeOfAKindCard);
             }
 
-            var secondPairCard = numCards
-                .Where(x => x.Value == 2 && x.Key != firstPairCard)
+            var firstPairCard = numCards
+                .Where(x => x.Key != Card.Joker && x.Value == 2)
                 .Select(x => x.Key)
                 .FirstOrDefault();
+
+            if (firstPairCard == Card.None && numJokers >= 1)
+            {
+                firstPairCard = sortedCards.First();
+            }
+
+            var secondPairCard = numCards
+                .Where(x => x.Key != Card.Joker && x.Key != firstPairCard && x.Value == 2)
+                .Select(x => x.Key)
+                .FirstOrDefault();
+
+            if (secondPairCard == Card.None && numJokers >= 2)
+            {
+                secondPairCard = sortedCards
+                    .FirstOrDefault(x => x != firstPairCard);
+            }
 
             if (firstPairCard != Card.None && secondPairCard != Card.None)
             {
@@ -139,20 +167,20 @@ public class Day07
                 return new OnePair(firstPairCard);
             }
 
-            var highCard = hand.Cards.OrderDescending().First();
+            var highCard = sortedCards.First();
 
             return new HighCard(highCard);
         }
     }
 
-    record Hand(IReadOnlyList<Card> Cards, long Bid) : IComparable<Hand>
+    record Hand(IReadOnlyList<Card> Cards, long Bid, Part Part) : IComparable<Hand>
     {
         public static Hand Parse(string line, Part part)
         {
             var parts = line.Trim().Split(" ");
             var cards = parts[0].Select(ch => ParseCard(ch, part)).ToList();
             var bid = long.Parse(parts[1]);
-            return new Hand(cards, bid);
+            return new Hand(cards, bid, part);
         }
 
         public int CompareTo(Hand? maybeOther)
@@ -161,8 +189,8 @@ public class Day07
             {
                 Debug.Assert(this.Cards.Count == other.Cards.Count);
 
-                var typeA = HandType.FromHand(this);
-                var typeB = HandType.FromHand(other);
+                var typeA = HandType.FromHand(this, this.Part);
+                var typeB = HandType.FromHand(other, this.Part);
                 if (typeA.Ordering == typeB.Ordering)
                 {
                     for (var i = 0; i < this.Cards.Count; ++i)
@@ -189,9 +217,9 @@ public class Day07
             .ToList();
     }
 
-    static long PartOne(string input)
+    static long GetTotalWinnings(string input, Part part)
     {
-        var hands = Parse(input, Part.One).Order().ToList();
+        var hands = Parse(input, part).Order().ToList();
         var sum = 0L;
         for (var i = 0; i < hands.Count; ++i)
         {
@@ -203,15 +231,95 @@ public class Day07
     [Fact]
     public void PartOneWithTestInput()
     {
-        var winnings = PartOne(TEST_INPUT);
+        var winnings = GetTotalWinnings(TEST_INPUT, Part.One);
+        Output.WriteLine("cowabunga!");
         Assert.Equal(6440, winnings);
+    }
+
+    [Fact]
+    public void PartTwoWithTestInput()
+    {
+        var winnings = GetTotalWinnings(TEST_INPUT, Part.Two);
+        Assert.Equal(5905, winnings);
+
+        var types = Parse(TEST_INPUT, Part.Two)
+            .Select(h => HandType.FromHand(h, Part.Two))
+            .ToList();
+
+        Assert.IsType<HandType.OnePair>(types[0]);
+        Assert.IsType<HandType.FourOfAKind>(types[1]);
+        Assert.IsType<HandType.TwoPair>(types[2]);
+        Assert.IsType<HandType.FourOfAKind>(types[3]);
+        Assert.IsType<HandType.FourOfAKind>(types[4]);
     }
 
     [Fact]
     public void PartOneActually()
     {
-        var winnings = PartOne(INPUT);
-        Console.WriteLine(winnings);
+        var winnings = GetTotalWinnings(INPUT, Part.One);
+        Output.WriteLine("{0}", winnings);
+    }
+
+    [Fact]
+    public void PartTwoActually()
+    {
+        var winnings = GetTotalWinnings(INPUT, Part.Two);
+        Output.WriteLine("{0}", winnings);
+    }
+
+    [Fact]
+    public void ParseOnlyJokers()
+    {
+        var hands = Parse("JJJJJ 542", Part.Two);
+
+        Assert.Single(hands);
+
+        foreach (var c in hands[0].Cards)
+        {
+            Assert.Equal(Card.Joker, c);
+        }
+    }
+
+    [Fact]
+    public void CountsJokerOnce()
+    {
+        var hands = Parse("K8Q6J 700", Part.Two);
+        var type = HandType.FromHand(hands[0], Part.Two);
+        Assert.Equal(new HandType.OnePair(Card.King), type);
+    }
+
+    [Fact]
+    public void ParsesFivesOfAKindWithJokers()
+    {
+        var hands = Parse("JJJJJ 542", Part.Two);
+        var type = HandType.FromHand(hands[0], Part.Two);
+        Assert.Equal(new HandType.FiveOfAKind(Card.Joker), type);
+    }
+
+    [Theory]
+    [InlineData("QJ2J8 329", typeof(HandType.ThreeOfAKind))]
+    public void DetermineHandType(string input, Type expected)
+    {
+        var hands = Parse(input, Part.Two);
+        var type = HandType.FromHand(hands[0], Part.Two);
+
+        Assert.IsType(expected, type);
+    }
+
+    [Fact]
+    public void Thing()
+    {
+        foreach (var line in INPUT.Trim().Split("\n"))
+        {
+            if (!line.Contains('J'))
+            {
+                continue;
+            }
+            var parsed = Hand.Parse(line, Part.Two);
+            var type = HandType.FromHand(parsed, Part.Two);
+
+            // cowabunga...
+        }
     }
 
     const string TEST_INPUT = @"
